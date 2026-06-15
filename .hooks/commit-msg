@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+msg_file=$1
+
+# First non-empty, non-comment line = the subject
+subject=$(grep -v '^#' "$msg_file" | sed '/./,$!d' | head -n1)
+
+# Skip auto-generated merge commits
+case "$subject" in
+  Merge\ *) exit 0 ;;
+esac
+
+# Conventional Commits: <type>(<optional scope>)<optional !>: <description>
+pattern='^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert|config)(\([a-z0-9._-]+\))?!?: .+'
+
+if ! echo "$subject" | grep -Eq "$pattern"; then
+  echo "❌ Invalid commit message format."
+  echo
+  echo "   Subject: $subject"
+  echo
+  echo "   Commit messages must follow Conventional Commits:"
+  echo "     <type>(<optional scope>): <description>"
+  echo
+  echo "   Allowed types: feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert, config"
+  echo "   Example: chore: changing of something in README"
+  exit 1
+fi
+
+# Best practice: keep the subject line concise
+if [ "${#subject}" -gt 72 ]; then
+  echo "❌ Commit subject is too long (${#subject} chars). Keep it under 72."
+  echo "   Subject: $subject"
+  exit 1
+fi
+
+echo "✅ Commit message format OK."
