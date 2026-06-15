@@ -36,3 +36,12 @@ To help you build a richer and more useful Second Brain, you are encouraged to i
 ## Models
 
 Learners can choose to use either Claude or Gemini models (if the 5$ credit has not been exhausted) to do the Capstone project. We recommend the learner to try it out in both and see how each of the models perform.
+
+## Tech Stack
+
+- Python
+- LangGraph
+- Postgres Vector
+- Arize Phoenix (with Postgres)
+- Docker (docker compose)
+- Tavily SDK (for web search, web crawling and extract data on website)
