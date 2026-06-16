@@ -1,0 +1,7 @@
+# Python
+.venv
+
+# Environment variable files
+.env
+.env.*.local
+!.env.template
