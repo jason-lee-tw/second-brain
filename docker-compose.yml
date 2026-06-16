@@ -1,0 +1,11 @@
+services:
+  ollama-checker:
+    image: curlimages/curl:latest
+    env_file:
+      - ./apps/backend/.env
+    network_mode: host
+    volumes:
+      - ./docker/ollama-checker.sh:/scripts/ollama-checker.sh:ro
+    entrypoint: ["sh", "/scripts/ollama-checker.sh"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
