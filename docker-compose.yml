@@ -9,3 +9,79 @@ services:
     entrypoint: ["sh", "/scripts/ollama-checker.sh"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  app_postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: second_brain
+      POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: second_brain
+    ports:
+      - "5432:5432"
+    volumes:
+      - app_postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U second_brain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phoenix_postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: phoenix
+      POSTGRES_PASSWORD: ${PHOENIX_POSTGRES_PASSWORD:-phoenix_secret}
+      POSTGRES_DB: phoenix
+    volumes:
+      - phoenix_postgres_data:/var/lib/postgresql/data
+    networks:
+      - phoenix_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phoenix"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    environment:
+      PHOENIX_SQL_DATABASE_URL: postgresql://phoenix:${PHOENIX_POSTGRES_PASSWORD:-phoenix_secret}@phoenix_postgres:5432/phoenix
+    ports:
+      - "6006:6006"
+    networks:
+      - phoenix_network
+    depends_on:
+      phoenix_postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: ../../docker/Dockerfile.backend
+    env_file:
+      - ./apps/backend/.env
+    ports:
+      - "3001:8000"
+    networks:
+      - app_network
+    depends_on:
+      app_postgres:
+        condition: service_healthy
+      ollama-checker:
+        condition: service_completed_successfully
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./temp:/app/temp
+
+networks:
+  app_network:
+    driver: bridge
+  phoenix_network:
+    driver: bridge
+
+volumes:
+  app_postgres_data:
+  phoenix_postgres_data:

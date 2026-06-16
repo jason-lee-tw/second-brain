@@ -57,8 +57,32 @@ clean-python:
   @rm -rf .ruff_cache
   @echo "All cached files are deleted."
 
-# Running backend unit tests (pending implemented)
-[group: 'Test']
+# Lint entire workspace
+[group: "Format"]
+lint:
+  @uv run ruff check .
+
+# Format entire workspace
+[group: "Format"]
+format:
+  @uv run ruff format .
+
+# Backend unit tests
+[group: "Test"]
 test-unit:
-  @cd apps/backend && \
-    echo "This is pending implemented"
+  @uv run --package second-brain pytest apps/backend/tests/unit
+
+# Backend integration tests
+[group: "Test"]
+test-integration:
+  @uv run --package second-brain pytest apps/backend/tests/integration
+
+# Run all backend tests
+[group: "Test"]
+test:
+  @uv run --package second-brain pytest apps/backend/tests
+
+# Run Alembic migrations (requires running postgres via just up-build first)
+[group: "DB"]
+migrate:
+  @cd apps/backend && uv run alembic upgrade head
