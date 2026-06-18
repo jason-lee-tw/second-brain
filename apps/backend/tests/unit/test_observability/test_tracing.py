@@ -12,6 +12,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 
 from second_brain.observability.tracing import setup_tracing, trace_node
 
@@ -131,6 +132,8 @@ class TestTraceNode:
         spans = in_memory_tracer.get_finished_spans()
         assert len(spans) == 1
         assert spans[0].end_time is not None
+        assert spans[0].status.status_code == StatusCode.ERROR
+        assert any(e.name == "exception" for e in spans[0].events)
 
     def test_raises_type_error_for_sync_function(self):
         """
