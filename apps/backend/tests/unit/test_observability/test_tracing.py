@@ -40,11 +40,11 @@ class TestSetupTracing:
             "second_brain.observability.tracing.register",
             return_value=mock_provider,
         ) as mock_register:
-            result = setup_tracing(phoenix_endpoint="http://localhost:6006/v1/traces")
+            result = setup_tracing(phoenix_collection_endpoint="http://localhost:4317")
 
         mock_register.assert_called_once_with(
             project_name="second-brain",
-            endpoint="http://localhost:6006/v1/traces",
+            endpoint="http://localhost:4317",
         )
         assert result is mock_provider
 
@@ -56,13 +56,13 @@ class TestSetupTracing:
             return_value=mock_provider,
         ) as mock_register:
             setup_tracing(
-                phoenix_endpoint="http://localhost:6006/v1/traces",
+                phoenix_collection_endpoint="http://localhost:4317",
                 service_name="my-service",
             )
 
         mock_register.assert_called_once_with(
             project_name="my-service",
-            endpoint="http://localhost:6006/v1/traces",
+            endpoint="http://localhost:4317",
         )
 
 

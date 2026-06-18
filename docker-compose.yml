@@ -50,6 +50,7 @@ services:
       PHOENIX_SQL_DATABASE_URL: postgresql://phoenix:${PHOENIX_POSTGRES_PASSWORD:-phoenix_secret}@phoenix_postgres:5432/phoenix
     ports:
       - "6006:6006"
+      - "4317:4317"
     networks:
       - phoenix_network
     depends_on:

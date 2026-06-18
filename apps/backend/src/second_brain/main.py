@@ -9,7 +9,7 @@ from second_brain.observability.tracing import setup_tracing
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_tracing(phoenix_endpoint=settings.phoenix_endpoint)
+    setup_tracing(phoenix_collection_endpoint=settings.phoenix_collection_endpoint)
     yield
 
 

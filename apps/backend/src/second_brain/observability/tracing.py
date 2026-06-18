@@ -10,7 +10,7 @@ from phoenix.otel import register
 
 
 def setup_tracing(
-    phoenix_endpoint: str,
+    phoenix_collection_endpoint: str,
     service_name: str = "second-brain",
 ) -> TracerProvider:
     """Configure the global OTEL TracerProvider with Phoenix as the trace backend.
@@ -18,8 +18,8 @@ def setup_tracing(
     Call once at app startup (inside the FastAPI lifespan).
 
     Args:
-        phoenix_endpoint: OTLP HTTP collector URL, e.g.
-            ``http://host.docker.internal:6006/v1/traces``.
+        phoenix_collection_endpoint: OTLP gRPC collector URL, e.g.
+            ``http://host.docker.internal:4317``.
             The backend reaches Phoenix via the Docker host port — the two
             services are on isolated networks by design.
         service_name: The service name shown in the Phoenix UI.
@@ -30,7 +30,7 @@ def setup_tracing(
     """
     provider: TracerProvider = register(
         project_name=service_name,
-        endpoint=phoenix_endpoint,
+        endpoint=phoenix_collection_endpoint,
     )
     return provider
 
