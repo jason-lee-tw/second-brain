@@ -11,28 +11,27 @@ from phoenix.otel import register
 
 def setup_tracing(
     phoenix_collection_endpoint: str,
-    service_name: str = "second-brain",
 ) -> TracerProvider:
     """Configure the global OTEL TracerProvider with Phoenix as the trace backend.
 
     Call once at app startup (inside the FastAPI lifespan).
 
     Args:
-        phoenix_collection_endpoint: OTLP gRPC collector URL, e.g.
+        phoenix_collection_endpoint: OTLP/gRPC collector URL, e.g.
             ``http://host.docker.internal:4317``.
+            arize-phoenix-otel register() accepts http:// for plaintext gRPC —
+            not HTTPS, not grpc://.
             The backend reaches Phoenix via the Docker host port — the two
             services are on isolated networks by design.
-        service_name: The service name shown in the Phoenix UI.
 
     Returns:
         The configured ``TracerProvider``, also set as the global provider via
         ``opentelemetry.trace.set_tracer_provider()``.
     """
-    provider: TracerProvider = register(
-        project_name=service_name,
+    return register(
+        project_name="second-brain",
         endpoint=phoenix_collection_endpoint,
     )
-    return provider
 
 
 def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:

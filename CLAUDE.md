@@ -44,6 +44,8 @@ TDD is expected: new code ships with tests for the happy path and 2+ edge cases 
 
 - Do NOT commit directly to `main`, ALWAYS create a branch follow format `<category>/<ticket_number_or_000>-<description>`
 - Do NOT suppress errors with broad excepts — fix the root cause
+  (exception: teardown paths may catch-and-log broad exceptions with
+  exc_info=True when the exception is unactionable at exit time)
 - Do NOT install dependencies without flagging it first (use `uv add`, never edit lockfiles by hand)
 - Commits MUST follow Conventional Commits (enforced by `.hooks/commit-msg`)
 

@@ -18,6 +18,8 @@ async def lifespan(app: FastAPI):
     yield
     try:
         provider.shutdown()
+    # ponytail: teardown broad-catch — shutdown errors are unactionable at exit;
+    # exc_info=True preserves visibility without propagating into ASGI teardown
     except Exception:
         _logger.warning("TracerProvider shutdown raised an exception", exc_info=True)
 
