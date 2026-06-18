@@ -31,7 +31,7 @@
 **Files:**
 - Modify: `apps/backend/pyproject.toml`
 
-- [ ] **Step 1: Add OTEL dependencies**
+- [X] **Step 1: Add OTEL dependencies**
 
   Open `apps/backend/pyproject.toml`. Add the following packages to the `[project] dependencies` list. The rest of the file (existing deps, build config, pytest config) stays unchanged.
 
@@ -72,7 +72,7 @@
   testpaths = ["tests"]
   ```
 
-- [ ] **Step 2: Install packages**
+- [X] **Step 2: Install packages**
 
   ```bash
   cd apps/backend && uv sync
@@ -84,7 +84,7 @@
   ```
   Expected output: `OK`
 
-- [ ] **Step 3: Commit**
+- [X] **Step 3: Commit**
 
   ```bash
   git add apps/backend/pyproject.toml
@@ -99,7 +99,7 @@
 - Modify: `apps/backend/src/second_brain/config.py`
 - Modify: `apps/backend/.env.template`
 
-- [ ] **Step 1: Add `phoenix_endpoint` to `Settings`**
+- [X] **Step 1: Add `phoenix_endpoint` to `Settings`**
 
   Replace the full contents of `apps/backend/src/second_brain/config.py`:
 
@@ -122,7 +122,7 @@
   settings = Settings()
   ```
 
-- [ ] **Step 2: Update `.env.template`**
+- [X] **Step 2: Update `.env.template`**
 
   Replace the full contents of `apps/backend/.env.template`:
 
@@ -135,7 +135,7 @@
   PHOENIX_ENDPOINT="http://host.docker.internal:6006/v1/traces"
   ```
 
-- [ ] **Step 3: Verify settings load**
+- [X] **Step 3: Verify settings load**
 
   ```bash
   cd apps/backend && python -c "
@@ -151,7 +151,7 @@
 
   Expected output: `http://host.docker.internal:6006/v1/traces`
 
-- [ ] **Step 4: Commit**
+- [X] **Step 4: Commit**
 
   ```bash
   git add apps/backend/src/second_brain/config.py apps/backend/.env.template
@@ -168,14 +168,14 @@
 - Create: `apps/backend/tests/unit/test_observability/__init__.py`
 - Create: `apps/backend/tests/unit/test_observability/test_tracing.py`
 
-- [ ] **Step 1: Create directories**
+- [X] **Step 1: Create directories**
 
   ```bash
   mkdir -p apps/backend/src/second_brain/observability
   mkdir -p apps/backend/tests/unit/test_observability
   ```
 
-- [ ] **Step 2: Write failing tests**
+- [X] **Step 2: Write failing tests**
 
   Create `apps/backend/tests/unit/test_observability/__init__.py` (empty file):
 
@@ -298,7 +298,7 @@
           assert my_special_node.__name__ == "my_special_node"
   ```
 
-- [ ] **Step 3: Run tests — verify they fail**
+- [X] **Step 3: Run tests — verify they fail**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py -v
@@ -309,7 +309,7 @@
   ModuleNotFoundError: No module named 'second_brain.observability'
   ```
 
-- [ ] **Step 4: Create the observability package marker**
+- [X] **Step 4: Create the observability package marker**
 
   Create `apps/backend/src/second_brain/observability/__init__.py`:
 
@@ -321,7 +321,7 @@
   __all__ = ["setup_tracing", "trace_node"]
   ```
 
-- [ ] **Step 5: Run tests again — verify updated failure**
+- [X] **Step 5: Run tests again — verify updated failure**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py -v
@@ -332,7 +332,7 @@
   ModuleNotFoundError: No module named 'second_brain.observability.tracing'
   ```
 
-- [ ] **Step 6: Implement `tracing.py`**
+- [X] **Step 6: Implement `tracing.py`**
 
   Create `apps/backend/src/second_brain/observability/tracing.py`:
 
@@ -398,7 +398,7 @@
       return decorator
   ```
 
-- [ ] **Step 7: Run tests — verify they pass**
+- [X] **Step 7: Run tests — verify they pass**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py -v
@@ -415,7 +415,7 @@
   6 passed in ...
   ```
 
-- [ ] **Step 8: Commit**
+- [X] **Step 8: Commit**
 
   ```bash
   git add \
@@ -434,7 +434,7 @@
 - Modify: `apps/backend/src/second_brain/main.py`
 - Modify: `apps/backend/tests/unit/test_observability/test_tracing.py`
 
-- [ ] **Step 1: Write failing test — add FastAPI instrumentation test to `test_tracing.py`**
+- [X] **Step 1: Write failing test — add FastAPI instrumentation test to `test_tracing.py`**
 
   Append the following class to the **end** of `apps/backend/tests/unit/test_observability/test_tracing.py` (after `TestTraceNode`):
 
@@ -514,7 +514,7 @@
               exporter.clear()
   ```
 
-- [ ] **Step 2: Run new tests — verify they fail**
+- [X] **Step 2: Run new tests — verify they fail**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py::TestFastAPIInstrumentation -v
@@ -527,7 +527,7 @@
 
   (The first test `test_http_request_emits_span` will pass because it doesn't depend on `main.py`; the second will fail because `main.py` doesn't import `setup_tracing` yet.)
 
-- [ ] **Step 3: Implement `main.py` changes**
+- [X] **Step 3: Implement `main.py` changes**
 
   Replace the full contents of `apps/backend/src/second_brain/main.py`:
 
@@ -561,7 +561,7 @@
       return {"status": "ok"}
   ```
 
-- [ ] **Step 4: Run all observability tests — verify they pass**
+- [X] **Step 4: Run all observability tests — verify they pass**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py -v
@@ -580,7 +580,7 @@
   8 passed in ...
   ```
 
-- [ ] **Step 5: Commit**
+- [X] **Step 5: Commit**
 
   ```bash
   git add \
@@ -598,7 +598,7 @@
 
 **Context:** On Linux Docker hosts, containers cannot reach the host machine via `host.docker.internal` unless it is explicitly mapped. Docker Desktop (Mac/Windows) provides this automatically. Adding `extra_hosts: ["host.docker.internal:host-gateway"]` to the backend service makes the hostname resolve on Linux without breaking Mac/Windows.
 
-- [ ] **Step 1: Add `extra_hosts` to the backend service**
+- [X] **Step 1: Add `extra_hosts` to the backend service**
 
   In `docker-compose.yml`, locate the `backend` service and add `extra_hosts`. Below is the complete file reflecting the state after Ticket 1 plus the Ticket 2 addition:
 
@@ -707,7 +707,7 @@
   - Phoenix container not healthy (`docker compose ps phoenix`)
   - On Linux: `host.docker.internal` not resolving (verify `extra_hosts` was applied with `docker inspect <backend-container>`)
 
-- [ ] **Step 3: Commit**
+- [X] **Step 3: Commit**
 
   ```bash
   git add docker-compose.yml
