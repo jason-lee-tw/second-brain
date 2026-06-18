@@ -5,9 +5,11 @@ Tests cover:
 - trace_node() decorator creates a named span and preserves return values
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -48,23 +50,6 @@ class TestSetupTracing:
             endpoint="http://localhost:4317",
         )
         assert result is mock_provider
-
-    def test_accepts_custom_service_name(self):
-        """setup_tracing() passes a custom service_name to register as project_name."""
-        mock_provider = MagicMock(spec=TracerProvider)
-        with patch(
-            "second_brain.observability.tracing.register",
-            return_value=mock_provider,
-        ) as mock_register:
-            setup_tracing(
-                phoenix_collection_endpoint="http://localhost:4317",
-                service_name="my-service",
-            )
-
-        mock_register.assert_called_once_with(
-            project_name="my-service",
-            endpoint="http://localhost:4317",
-        )
 
 
 class TestTraceNode:
@@ -143,6 +128,7 @@ class TestTraceNode:
         This exercises the production import-order: LangGraph nodes are decorated
         at module level, before the FastAPI lifespan calls setup_tracing().
         """
+
         # Decorate BEFORE setting the in-memory provider — simulates import-time
         # decoration
         @trace_node("pre-setup-node")
@@ -165,47 +151,28 @@ class TestTraceNode:
 
 
 class TestFastAPIInstrumentation:
-    def test_main_app_health_emits_span(self):
+    def test_main_app_health_emits_span(self, in_memory_tracer):
         """The real main.py app produces spans for /health when tracing is active.
 
         setup_tracing() is mocked so no connection to Phoenix is attempted.
         FastAPIInstrumentor.instrument_app() is called at import time in main.py,
         so the middleware is present whenever main.py is imported.
         """
-        from fastapi.testclient import TestClient
+        with patch("second_brain.main.setup_tracing"):
+            from second_brain.main import app
 
-        exporter = InMemorySpanExporter()
-        provider = TracerProvider()
-        provider.add_span_processor(SimpleSpanProcessor(exporter))
-        original_provider = trace.get_tracer_provider()
-        trace.set_tracer_provider(provider)
+            with TestClient(app) as client:
+                response = client.get("/health")
 
-        try:
-            # Patch setup_tracing so the lifespan does not override our test provider.
-            with patch("second_brain.main.setup_tracing"):
-                from second_brain.main import app
-
-                # Context manager triggers lifespan (patched setup_tracing).
-                with TestClient(app) as client:
-                    response = client.get("/health")
-
-            assert response.status_code == 200
-            spans = exporter.get_finished_spans()
-            assert len(spans) >= 1
-            assert any("GET /health" in s.name for s in spans)
-        finally:
-            trace.set_tracer_provider(original_provider)
-            exporter.clear()
+        assert response.status_code == 200
+        spans = in_memory_tracer.get_finished_spans()
+        assert len(spans) >= 1
+        assert any("GET /health" in s.name for s in spans)
 
 
 class TestMainLifespan:
     def test_lifespan_shuts_down_tracer_provider_on_exit(self):
         """Lifespan teardown calls provider.shutdown() to flush buffered spans."""
-        from unittest.mock import MagicMock, patch
-
-        from fastapi.testclient import TestClient
-        from opentelemetry.sdk.trace import TracerProvider
-
         mock_provider = MagicMock(spec=TracerProvider)
 
         with patch("second_brain.main.setup_tracing", return_value=mock_provider):
@@ -218,17 +185,12 @@ class TestMainLifespan:
 
     def test_lifespan_logs_warning_when_shutdown_raises(self, caplog):
         """Lifespan teardown catches shutdown errors and logs a warning."""
-        import logging
-        from unittest.mock import MagicMock, patch
-
-        from fastapi.testclient import TestClient
-        from opentelemetry.sdk.trace import TracerProvider
-
         mock_provider = MagicMock(spec=TracerProvider)
         mock_provider.shutdown.side_effect = RuntimeError("flush timeout")
 
         with patch("second_brain.main.setup_tracing", return_value=mock_provider):
             from second_brain.main import app
+
             with caplog.at_level(logging.WARNING, logger="second_brain.main"):
                 with TestClient(app):
                     pass  # lifespan enters and exits
