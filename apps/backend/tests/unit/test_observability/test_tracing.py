@@ -271,3 +271,23 @@ class TestMainLifespan:
                 pass  # lifespan enters and exits
 
         mock_provider.shutdown.assert_called_once()
+
+    def test_lifespan_logs_warning_when_shutdown_raises(self, caplog):
+        """Lifespan teardown catches shutdown errors and logs a warning."""
+        import logging
+        from unittest.mock import MagicMock, patch
+
+        from fastapi.testclient import TestClient
+        from opentelemetry.sdk.trace import TracerProvider
+
+        mock_provider = MagicMock(spec=TracerProvider)
+        mock_provider.shutdown.side_effect = RuntimeError("flush timeout")
+
+        with patch("second_brain.main.setup_tracing", return_value=mock_provider):
+            from second_brain.main import app
+            with caplog.at_level(logging.WARNING, logger="second_brain.main"):
+                with TestClient(app):
+                    pass  # lifespan enters and exits
+
+        mock_provider.shutdown.assert_called_once()
+        assert "TracerProvider shutdown raised an exception" in caplog.text
