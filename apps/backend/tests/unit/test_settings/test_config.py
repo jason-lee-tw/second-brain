@@ -33,6 +33,20 @@ class TestPhoenixEndpointDefault:
         assert settings.phoenix_collection_endpoint == "http://localhost:4317"
 
 
+class TestDeprecatedPhoenixKey:
+    def test_raises_on_old_env_var_name(self, monkeypatch):
+        """Settings raises ValueError when the deprecated key is present."""
+        monkeypatch.setenv("PHOENIX_COLLECTOR_ENDPOINT", "http://old:4317")
+        monkeypatch.delenv("PHOENIX_COLLECTION_ENDPOINT", raising=False)
+        with pytest.raises(ValueError, match="PHOENIX_COLLECTOR_ENDPOINT"):
+            Settings(
+                database_url="postgresql+psycopg2://u:p@localhost/db",
+                anthropic_api_key="key",
+                tavily_api_key="key",
+                _env_file=None,
+            )
+
+
 class TestApiKeyMasking:
     """API key fields must be masked in repr and str to prevent secret leakage.
 
@@ -40,10 +54,13 @@ class TestApiKeyMasking:
     Parameterized per field so adding a new SecretStr field only requires one entry.
     """
 
-    @pytest.mark.parametrize("field,secret", [
-        ("anthropic_api_key", "super-secret-anthropic-key"),
-        ("tavily_api_key", "super-secret-tavily-key"),
-    ])
+    @pytest.mark.parametrize(
+        "field,secret",
+        [
+            ("anthropic_api_key", "super-secret-anthropic-key"),
+            ("tavily_api_key", "super-secret-tavily-key"),
+        ],
+    )
     def test_api_key_masked_and_retrievable(self, field: str, secret: str) -> None:
         """API key must be masked in repr/str but readable via get_secret_value()."""
         settings = _make_settings()
