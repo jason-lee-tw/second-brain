@@ -148,6 +148,32 @@ class TestTraceNode:
             def sync_node(state: dict) -> dict:
                 return state
 
+    @pytest.mark.asyncio
+    async def test_tracer_obtained_before_provider_set_still_records_spans(self):
+        """@trace_node decorators applied at import time (before setup_tracing)
+        still produce spans because ProxyTracer lazily forwards to the real provider.
+
+        This exercises the production import-order: LangGraph nodes are decorated
+        at module level, before the FastAPI lifespan calls setup_tracing().
+        """
+        # Decorate BEFORE setting the in-memory provider — simulates import-time
+        # decoration
+        @trace_node("pre-setup-node")
+        async def node(state: dict) -> dict:
+            return state
+
+        # NOW wire up the in-memory provider (as setup_tracing() does in the lifespan)
+        exporter = InMemorySpanExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+        trace.set_tracer_provider(provider)
+
+        await node({})
+
+        spans = exporter.get_finished_spans()
+        assert len(spans) == 1
+        assert spans[0].name == "pre-setup-node"
+
 
 class TestFastAPIInstrumentation:
     def test_http_request_emits_span(self):

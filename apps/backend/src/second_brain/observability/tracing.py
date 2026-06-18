@@ -56,7 +56,9 @@ def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
             raise TypeError(
                 f"trace_node can only decorate async functions, got: {func!r}"
             )
-        # acquired once per decoration, not per call
+        # Acquired once per decoration (not per call). Before setup_tracing() runs this
+        # returns a ProxyTracer that lazily forwards to the real provider — module-level
+        # decorations work correctly even when applied before the lifespan starts.
         tracer = trace.get_tracer(__name__)
 
         @functools.wraps(func)
