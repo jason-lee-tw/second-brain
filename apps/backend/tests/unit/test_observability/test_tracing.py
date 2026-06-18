@@ -126,6 +126,13 @@ class TestTraceNode:
         assert len(spans) == 1
         assert spans[0].end_time is not None
 
+    def test_raises_type_error_for_sync_function(self):
+        """trace_node raises TypeError at decoration time if applied to a sync function."""
+        with pytest.raises(TypeError, match="async functions"):
+            @trace_node("sync-node")
+            def sync_node(state: dict) -> dict:
+                return state
+
 
 class TestFastAPIInstrumentation:
     def test_http_request_emits_span(self):
