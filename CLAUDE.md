@@ -10,6 +10,8 @@ A personal "Second Brain" knowledge management system. Ingests content from loca
 - `POST /ingest/file` — process `.md` files from `temp/pending-digest-docs/`
 - `POST /ingest/url` — crawl URL(s) via Tavily, save as markdown, then ingest
 
+**Phoenix is running on `localhost:6006` via Docker Compose.**
+
 ### Tech Stack
 
 Refer to [001-techstack.md](./docs/codebase/001-tech-stack.md).
@@ -31,7 +33,7 @@ Refer to [002-repo-structure.md](./docs/codebase/002-repo-structure.md).
 
 ```bash
 just init        # uv sync --all-extras (installs all workspace members + dev tools) + install git hooks (run once)
-just up-build    # run backend + Phoenix via Docker Compose (UI at localhost:6006)
+just up-all      # run backend + Phoenix via Docker Compose and start Ollama
 just lint        # ruff check across entire workspace
 just test-unit   # run apps/backend unit tests
 ```
