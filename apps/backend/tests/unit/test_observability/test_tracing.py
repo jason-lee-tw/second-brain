@@ -3,7 +3,6 @@
 Tests cover:
 - setup_tracing() wires the Phoenix OTEL exporter correctly
 - trace_node() decorator creates a named span and preserves return values
-- FastAPIInstrumentor produces HTTP-level spans (validates the pattern used in main.py)
 """
 from unittest.mock import MagicMock, patch
 
@@ -25,6 +24,9 @@ def in_memory_tracer():
     original_provider = trace.get_tracer_provider()
     trace.set_tracer_provider(provider)
     yield exporter
+    # NOTE: set_tracer_provider here is a no-op due to the OTel Once guard.
+    # Actual provider restoration is handled by the autouse fixture in conftest.py.
+    # Do not remove conftest.py thinking this teardown already covers it.
     trace.set_tracer_provider(original_provider)
     exporter.clear()
 
@@ -102,10 +104,24 @@ class TestTraceNode:
         assert spans[0].end_time is not None
 
     @pytest.mark.asyncio
-    async def test_preserves_original_function_name(self, in_memory_tracer):
+    async def test_preserves_original_function_name(self):
         """trace_node uses functools.wraps so __name__ is not clobbered."""
         @trace_node("whatever")
         async def my_special_node(state: dict) -> dict:
             return state
 
         assert my_special_node.__name__ == "my_special_node"
+
+    @pytest.mark.asyncio
+    async def test_exception_propagates_through_span(self, in_memory_tracer):
+        """Exceptions raised inside the node propagate out; span is still closed."""
+        @trace_node("error-node")
+        async def failing_node(state: dict) -> dict:
+            raise ValueError("boom")
+
+        with pytest.raises(ValueError, match="boom"):
+            await failing_node({})
+
+        spans = in_memory_tracer.get_finished_spans()
+        assert len(spans) == 1
+        assert spans[0].end_time is not None

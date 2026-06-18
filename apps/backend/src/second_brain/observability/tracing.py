@@ -1,6 +1,7 @@
 """OTEL tracing setup and LangGraph node span decorator."""
 
 import functools
+import inspect
 from typing import Any, Callable
 
 from opentelemetry import trace
@@ -34,7 +35,7 @@ def setup_tracing(
     return provider
 
 
-def trace_node(name: str) -> Callable:
+def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator that wraps an async LangGraph node function in an OTEL span.
 
     The span is a child of whatever span is active when the node is called,
@@ -49,10 +50,16 @@ def trace_node(name: str) -> Callable:
     Args:
         name: The span name displayed in the Phoenix trace waterfall.
     """
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        if not inspect.iscoroutinefunction(func):
+            raise TypeError(
+                f"trace_node can only decorate async functions, got: {func!r}"
+            )
+        # acquired once per decoration, not per call
+        tracer = trace.get_tracer(__name__)
+
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            tracer = trace.get_tracer(__name__)
             with tracer.start_as_current_span(name):
                 return await func(*args, **kwargs)
         return wrapper
