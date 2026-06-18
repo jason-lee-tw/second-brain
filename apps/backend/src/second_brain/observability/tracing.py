@@ -50,6 +50,7 @@ def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     Args:
         name: The span name displayed in the Phoenix trace waterfall.
     """
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         if not inspect.iscoroutinefunction(func):
             raise TypeError(
@@ -62,5 +63,7 @@ def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             with tracer.start_as_current_span(name):
                 return await func(*args, **kwargs)
+
         return wrapper
+
     return decorator

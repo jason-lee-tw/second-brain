@@ -7,6 +7,7 @@ This breaks fixtures that need to swap the provider per-test.
 This autouse fixture saves and restores the internal OTel state around every
 test, so each test gets a clean provider slot.
 """
+
 import opentelemetry.trace as trace_api
 import pytest
 

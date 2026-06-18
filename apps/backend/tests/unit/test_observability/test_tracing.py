@@ -4,6 +4,7 @@ Tests cover:
 - setup_tracing() wires the Phoenix OTEL exporter correctly
 - trace_node() decorator creates a named span and preserves return values
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -69,6 +70,7 @@ class TestTraceNode:
     @pytest.mark.asyncio
     async def test_creates_span_with_correct_name(self, in_memory_tracer):
         """trace_node decorator creates a span whose name matches the argument."""
+
         @trace_node("my-agent-node")
         async def dummy_node(state: dict) -> dict:
             return state
@@ -82,6 +84,7 @@ class TestTraceNode:
     @pytest.mark.asyncio
     async def test_preserves_function_return_value(self, in_memory_tracer):
         """trace_node does not alter the wrapped function's return value."""
+
         @trace_node("noop-node")
         async def dummy_node(state: dict) -> dict:
             return {"result": "done", "count": 42}
@@ -93,6 +96,7 @@ class TestTraceNode:
     @pytest.mark.asyncio
     async def test_span_is_finished_after_return(self, in_memory_tracer):
         """The span created by trace_node is closed before the decorator returns."""
+
         @trace_node("finishing-node")
         async def dummy_node(state: dict) -> dict:
             return state
@@ -106,6 +110,7 @@ class TestTraceNode:
     @pytest.mark.asyncio
     async def test_preserves_original_function_name(self):
         """trace_node uses functools.wraps so __name__ is not clobbered."""
+
         @trace_node("whatever")
         async def my_special_node(state: dict) -> dict:
             return state
@@ -115,6 +120,7 @@ class TestTraceNode:
     @pytest.mark.asyncio
     async def test_exception_propagates_through_span(self, in_memory_tracer):
         """Exceptions raised inside the node propagate out; span is still closed."""
+
         @trace_node("error-node")
         async def failing_node(state: dict) -> dict:
             raise ValueError("boom")
@@ -129,6 +135,7 @@ class TestTraceNode:
     def test_raises_type_error_for_sync_function(self):
         """trace_node raises TypeError at decoration time if applied to a sync function."""
         with pytest.raises(TypeError, match="async functions"):
+
             @trace_node("sync-node")
             def sync_node(state: dict) -> dict:
                 return state
@@ -196,6 +203,7 @@ class TestFastAPIInstrumentation:
             # Patch setup_tracing so the lifespan does not override our test provider.
             with patch("second_brain.main.setup_tracing"):
                 from second_brain.main import app
+
                 # Context manager triggers lifespan (patched setup_tracing).
                 with TestClient(app) as client:
                     response = client.get("/health")
