@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +7,8 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from second_brain.config import settings
 from second_brain.observability.tracing import setup_tracing
 
+_logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -13,7 +16,10 @@ async def lifespan(app: FastAPI):
         phoenix_collection_endpoint=settings.phoenix_collection_endpoint
     )
     yield
-    provider.shutdown()
+    try:
+        provider.shutdown()
+    except Exception:
+        _logger.warning("TracerProvider shutdown raised an exception", exc_info=True)
 
 
 app = FastAPI(title="Second Brain", version="0.1.0", lifespan=lifespan)

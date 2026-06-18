@@ -111,6 +111,7 @@ class TestTraceNode:
     @pytest.mark.asyncio
     async def test_preserves_original_function_name(self):
         """trace_node uses functools.wraps so __name__ is not clobbered."""
+        # no in_memory_tracer fixture — testing functools.wraps __name__ only
 
         @trace_node("whatever")
         async def my_special_node(state: dict) -> dict:

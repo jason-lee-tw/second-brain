@@ -47,6 +47,10 @@ def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         async def orchestrator_node(state: SecondBrainState) -> SecondBrainState:
             ...
 
+    .. note::
+        Only async functions may be decorated. Applying ``@trace_node`` to a
+        synchronous function raises ``TypeError`` at decoration time.
+
     Args:
         name: The span name displayed in the Phoenix trace waterfall.
     """
