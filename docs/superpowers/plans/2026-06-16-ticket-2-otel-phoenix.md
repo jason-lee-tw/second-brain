@@ -6,7 +6,7 @@
 
 **Architecture:** A `setup_tracing()` function initialises the global OTEL `TracerProvider` once at app startup (inside the FastAPI lifespan). `FastAPIInstrumentor.instrument_app(app)` wraps the app at module level so every HTTP request automatically gets a root span. A `trace_node(name)` decorator is defined for future use wrapping async LangGraph node functions with child spans.
 
-**Tech Stack:** `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-grpc`, `opentelemetry-instrumentation-fastapi`, `arize-phoenix-otel`, `pytest-asyncio`
+**Tech Stack:** `opentelemetry-sdk`, `opentelemetry-instrumentation-fastapi`, `arize-phoenix-otel` (infers gRPC for port 4317), `pytest-asyncio`
 
 ---
 
