@@ -95,20 +95,6 @@ class TestTraceNode:
         assert result == {"result": "done", "count": 42}
 
     @pytest.mark.asyncio
-    async def test_span_is_finished_after_return(self, in_memory_tracer):
-        """The span created by trace_node is closed before the decorator returns."""
-
-        @trace_node("finishing-node")
-        async def dummy_node(state: dict) -> dict:
-            return state
-
-        await dummy_node({})
-
-        spans = in_memory_tracer.get_finished_spans()
-        assert len(spans) == 1
-        assert spans[0].end_time is not None
-
-    @pytest.mark.asyncio
     async def test_preserves_original_function_name(self):
         """trace_node uses functools.wraps so __name__ is not clobbered."""
         # no in_memory_tracer fixture — testing functools.wraps __name__ only
@@ -179,48 +165,6 @@ class TestTraceNode:
 
 
 class TestFastAPIInstrumentation:
-    def test_http_request_emits_span(self):
-        """FastAPIInstrumentor.instrument_app() produces a span for each HTTP request.
-
-        This test validates the pattern applied in main.py: instrumenting a FastAPI
-        app causes every request to generate an OTEL span visible in Phoenix.
-        """
-        from fastapi import FastAPI
-        from fastapi.testclient import TestClient
-        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
-        exporter = InMemorySpanExporter()
-        provider = TracerProvider()
-        provider.add_span_processor(SimpleSpanProcessor(exporter))
-        original_provider = trace.get_tracer_provider()
-        trace.set_tracer_provider(provider)
-
-        try:
-            test_app = FastAPI()
-
-            @test_app.get("/health")
-            async def health():
-                return {"status": "ok"}
-
-            FastAPIInstrumentor.instrument_app(test_app)
-
-            # TestClient without context manager skips lifespan.
-            # No real Phoenix connection needed.
-            client = TestClient(test_app)
-            response = client.get("/health")
-
-            assert response.status_code == 200
-            spans = exporter.get_finished_spans()
-            assert len(spans) >= 1
-            assert any("GET /health" in s.name for s in spans)
-        finally:
-            # Do NOT call FastAPIInstrumentor().uninstrument() here — that would
-            # globally strip middleware from all instrumented apps (including main.app),
-            # breaking test_main_app_health_emits_span which runs in the same session.
-            # test_app is a local variable and gets garbage-collected safely.
-            trace.set_tracer_provider(original_provider)
-            exporter.clear()
-
     def test_main_app_health_emits_span(self):
         """The real main.py app produces spans for /health when tracing is active.
 

@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     # Access via .get_secret_value() when passing to SDK clients
     anthropic_api_key: SecretStr
     tavily_api_key: SecretStr
-    phoenix_collection_endpoint: str
+    phoenix_collection_endpoint: str = "http://localhost:4317"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
