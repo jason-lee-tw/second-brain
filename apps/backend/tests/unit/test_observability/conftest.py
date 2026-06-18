@@ -19,7 +19,8 @@ def _reset_otel_tracer_provider():
     # Verified against opentelemetry-api >=1.29. If this fails, the OTel internal
     # API has changed — update this fixture accordingly.
     assert hasattr(trace_api, "_TRACER_PROVIDER_SET_ONCE"), (
-        "OTel internal API changed — update _reset_otel_tracer_provider in conftest.py"
+        "OTel internal API changed (verified against opentelemetry-api>=1.29) "
+        "— update _reset_otel_tracer_provider in conftest.py"
     )
     original_provider = trace_api._TRACER_PROVIDER
     original_done = trace_api._TRACER_PROVIDER_SET_ONCE._done

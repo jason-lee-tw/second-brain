@@ -57,6 +57,12 @@ down-clean:
     echo "✅ Deleted all temp folders"
 
 
+# Run Alembic migrations (requires running postgres via just up-build first)
+[group: "DB"]
+migrate:
+  @uv run --package second-brain alembic upgrade head
+
+
 [group: "Clean up"]
 clean-python:
   @rm -rf **/.venv ./.venv
