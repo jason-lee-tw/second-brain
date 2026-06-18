@@ -120,7 +120,10 @@ class TestTraceNode:
 
     @pytest.mark.asyncio
     async def test_exception_propagates_through_span(self, in_memory_tracer):
-        """Exceptions raised inside the node propagate out; span is still closed."""
+        """
+        Exceptions propagate out; span is closed with ERROR status and exception
+        event recorded.
+        """
 
         @trace_node("error-node")
         async def failing_node(state: dict) -> dict:
