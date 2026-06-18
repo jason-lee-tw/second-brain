@@ -14,11 +14,13 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _reset_otel_tracer_provider():
-    """Save and restore the OTel global TracerProvider state around each test."""
+    """Saves/restores _TRACER_PROVIDER and _TRACER_PROVIDER_SET_ONCE._done."""
     # Accesses OTel private internals to reset global state between tests.
     # Verified against opentelemetry-api >=1.29. If this fails, the OTel internal
     # API has changed — update this fixture accordingly.
-    assert hasattr(trace_api, "_TRACER_PROVIDER_SET_ONCE"), (
+    assert hasattr(trace_api, "_TRACER_PROVIDER_SET_ONCE") and hasattr(
+        trace_api, "_TRACER_PROVIDER"
+    ), (
         "OTel internal API changed (verified against opentelemetry-api>=1.29) "
         "— update _reset_otel_tracer_provider in conftest.py"
     )
