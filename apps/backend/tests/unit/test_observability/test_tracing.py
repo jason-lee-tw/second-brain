@@ -166,6 +166,8 @@ class TestTraceNode:
         exporter = InMemorySpanExporter()
         provider = TracerProvider()
         provider.add_span_processor(SimpleSpanProcessor(exporter))
+        # _reset_otel_tracer_provider autouse (conftest.py) restores
+        # OTel global state on teardown — no explicit cleanup needed here.
         trace.set_tracer_provider(provider)
 
         await node({})
