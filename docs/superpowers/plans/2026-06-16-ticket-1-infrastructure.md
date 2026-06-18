@@ -152,7 +152,7 @@ ANTHROPIC_API_KEY="sk-ant-..."
 TAVILY_API_KEY="tvly-..."
 
 # Phoenix OTEL — backend reaches Phoenix via host port (never via phoenix_network)
-PHOENIX_COLLECTOR_ENDPOINT="http://host.docker.internal:6006/v1/traces"
+PHOENIX_ENDPOINT="http://host.docker.internal:6006/v1/traces"
 ```
 
 - [ ] **Step 3: Create `.env` from the template**
@@ -380,7 +380,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql+psycopg2://second_brain:secret
 os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-api-key")
 os.environ.setdefault("TAVILY_API_KEY", "test-tavily-key")
-os.environ.setdefault("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces")
+os.environ.setdefault("PHOENIX_ENDPOINT", "http://localhost:6006/v1/traces")
 ```
 
 Create `apps/backend/tests/test_health.py`:
@@ -425,7 +425,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     anthropic_api_key: str
     tavily_api_key: str
-    phoenix_collector_endpoint: str = "http://localhost:6006/v1/traces"
+    phoenix_endpoint: str = "http://host.docker.internal:6006/v1/traces"
 
     model_config = SettingsConfigDict(env_file=".env")
 
