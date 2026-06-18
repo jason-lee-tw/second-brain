@@ -63,6 +63,16 @@ services:
     depends_on:
       phoenix_postgres:
         condition: service_healthy
+    # Healthcheck: verifies HTTP UI readiness (port 6006).
+    # gRPC port 4317 is not directly checkable via urllib but is
+    # typically ready within the same start_period.
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:6006', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   db_migration:
     build:
