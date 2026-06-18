@@ -56,6 +56,19 @@ services:
       phoenix_postgres:
         condition: service_healthy
 
+  db_migration:
+    build:
+      context: ./apps/backend
+      dockerfile: ../../docker/Dockerfile.backend
+    command: alembic upgrade head
+    env_file:
+      - ./apps/backend/.env
+    networks:
+      - app_network
+    depends_on:
+      app_postgres:
+        condition: service_healthy
+
   backend:
     build:
       context: ./apps/backend
@@ -69,6 +82,8 @@ services:
     depends_on:
       app_postgres:
         condition: service_healthy
+      db_migration:
+        condition: service_completed_successfully
       ollama-checker:
         condition: service_completed_successfully
     extra_hosts:
