@@ -223,3 +223,22 @@ class TestFastAPIInstrumentation:
         finally:
             trace.set_tracer_provider(original_provider)
             exporter.clear()
+
+
+class TestMainLifespan:
+    def test_lifespan_shuts_down_tracer_provider_on_exit(self):
+        """Lifespan teardown calls provider.shutdown() to flush buffered spans."""
+        from unittest.mock import MagicMock, patch
+
+        from fastapi.testclient import TestClient
+        from opentelemetry.sdk.trace import TracerProvider
+
+        mock_provider = MagicMock(spec=TracerProvider)
+
+        with patch("second_brain.main.setup_tracing", return_value=mock_provider):
+            from second_brain.main import app
+
+            with TestClient(app):
+                pass  # lifespan enters and exits
+
+        mock_provider.shutdown.assert_called_once()

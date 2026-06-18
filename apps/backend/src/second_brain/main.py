@@ -9,8 +9,11 @@ from second_brain.observability.tracing import setup_tracing
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_tracing(phoenix_collection_endpoint=settings.phoenix_collection_endpoint)
+    provider = setup_tracing(
+        phoenix_collection_endpoint=settings.phoenix_collection_endpoint
+    )
     yield
+    provider.shutdown()
 
 
 app = FastAPI(title="Second Brain", version="0.1.0", lifespan=lifespan)
