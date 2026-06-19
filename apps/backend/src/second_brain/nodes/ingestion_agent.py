@@ -1,7 +1,6 @@
 import asyncio
 import hashlib
 import uuid
-from datetime import UTC, datetime
 
 import anthropic
 from sqlmodel import Session, select
@@ -22,6 +21,11 @@ MAX_RETRIES = 3
 _anthropic = anthropic.AsyncAnthropic(
     api_key=settings.anthropic_api_key.get_secret_value()
 )
+
+
+async def shutdown() -> None:
+    """Close the Anthropic async client. Called from the FastAPI lifespan."""
+    await _anthropic.close()
 
 
 def _compute_md5(content: str) -> str:
@@ -61,13 +65,11 @@ async def _process_one_chunk(
     embedded_text = f"{header}\n\n{chunk.content}"
     embedding = await embed_text(embedded_text)
     return DocumentChunk(
-        id=uuid.uuid4(),
         doc_id=doc_id,
         content=embedded_text,
         embedding=embedding,
         chunk_index=chunk.chunk_index,
         chunk_metadata=chunk.metadata,
-        created_at=datetime.now(UTC),
     )
 
 
@@ -100,7 +102,6 @@ async def _do_ingest(
             source_url=source_url,
             content_hash=content_hash,
             status="processed",
-            ingested_at=datetime.now(UTC),
         )
     )
     session.flush()
@@ -145,31 +146,25 @@ async def ingestion_agent_node(state: IngestionState) -> dict:
     except Exception as exc:
         error_msg = str(exc)
         next_count = current_count + 1
+        entry: FailedFile = {
+            "filename": filename,
+            "error": error_msg,
+            "retry_count": next_count,
+        }
 
         if next_count < MAX_RETRIES:
-            failed_entry: FailedFile = {
-                "filename": filename,
-                "error": error_msg,
-                "retry_count": next_count,
-            }
             return {
                 "in_progress": [],
-                "retry_queue": new_retry_queue + [failed_entry],
+                "retry_queue": new_retry_queue + [entry],
                 "failed": state["failed"],
             }
-        else:
-            FAILED_DIR.mkdir(parents=True, exist_ok=True)
-            src = PENDING_DOCS_DIR / filename
-            if src.exists():
-                src.rename(FAILED_DIR / filename)
 
-            terminal_entry: FailedFile = {
-                "filename": filename,
-                "error": error_msg,
-                "retry_count": next_count,
-            }
-            return {
-                "in_progress": [],
-                "retry_queue": new_retry_queue,
-                "failed": state["failed"] + [terminal_entry],
-            }
+        FAILED_DIR.mkdir(parents=True, exist_ok=True)
+        src = PENDING_DOCS_DIR / filename
+        if src.exists():
+            src.rename(FAILED_DIR / filename)
+        return {
+            "in_progress": [],
+            "retry_queue": new_retry_queue,
+            "failed": state["failed"] + [entry],
+        }

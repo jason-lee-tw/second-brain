@@ -35,18 +35,12 @@ def detect_content_type(text: str) -> str:
 def _extract_code_fences(text: str) -> tuple[str, dict[str, str]]:
     """Replace ``` code fences with unique placeholders to protect them from
     splitting."""
-    placeholders: dict[str, str] = {}
-    counter = 0
-
-    def replacer(match: re.Match) -> str:
-        nonlocal counter
-        key = f"__FENCE_{counter}__"
-        placeholders[key] = match.group(0)
-        counter += 1
-        return key
-
-    modified = re.sub(r"```[\s\S]*?```", replacer, text)
-    return modified, placeholders
+    matches = list(re.finditer(r"```[\s\S]*?```", text))
+    placeholders = {f"__FENCE_{i}__": m.group(0) for i, m in enumerate(matches)}
+    result = text
+    for key, original in placeholders.items():
+        result = result.replace(original, key, 1)
+    return result, placeholders
 
 
 def _restore_fences(text: str, placeholders: dict[str, str]) -> str:
@@ -109,19 +103,13 @@ def _merge_into_chunks(
     bucket: list[str] = []
     bucket_tokens = 0
 
-    def flush() -> None:
-        nonlocal bucket_tokens
-        if bucket:
-            result.append("\n\n".join(bucket))
-            bucket.clear()
-            bucket_tokens = 0
-
-    def flush_with_overlap() -> None:
+    def flush(*, hard: bool = False) -> None:
+        """Emit the current bucket. hard=True resets without overlap carry-over."""
         nonlocal bucket_tokens
         if not bucket:
             return
         result.append("\n\n".join(bucket))
-        if overlap > 0:
+        if not hard and overlap > 0:
             tail: list[str] = []
             tail_tokens = 0
             for item in reversed(bucket):
@@ -141,29 +129,29 @@ def _merge_into_chunks(
     for para in paragraphs:
         is_atomic = any(key in para for key in placeholders)
         para_restored = _restore_fences(para, placeholders)
-        para_tokens = count_tokens(para_restored)
 
         if is_atomic:
-            flush()
+            flush(hard=True)
             result.append(para_restored)
             continue
 
+        para_tokens = count_tokens(para_restored)
+
         if para_tokens > max_tokens:
-            flush()
+            flush(hard=True)
             for sentence in _split_by_sentences(para_restored):
                 s_tokens = count_tokens(sentence)
                 if bucket_tokens + s_tokens > max_tokens:
-                    flush_with_overlap()
+                    flush()
                 bucket.append(sentence)
                 bucket_tokens += s_tokens
         else:
             if bucket_tokens + para_tokens > max_tokens:
-                flush_with_overlap()
+                flush()
             bucket.append(para_restored)
             bucket_tokens += para_tokens
 
-    if bucket:
-        result.append("\n\n".join(bucket))
+    flush(hard=True)
 
     return result
 
@@ -190,39 +178,29 @@ def chunk_document(content: str, source: str) -> list[Chunk]:
     chunks: list[Chunk] = []
     chunk_index = 0
 
+    def _make_chunk(text: str, idx: int, hp: str) -> Chunk:
+        return Chunk(
+            content=text,
+            chunk_index=idx,
+            metadata={
+                "source": source,
+                "heading_path": hp,
+                "content_type": content_type,
+                "char_count": len(text),
+            },
+        )
+
     for heading_path, section_text in sections:
         section_restored = _restore_fences(section_text, placeholders)
 
         if count_tokens(section_restored) <= target:
-            chunks.append(
-                Chunk(
-                    content=section_restored,
-                    chunk_index=chunk_index,
-                    metadata={
-                        "source": source,
-                        "heading_path": heading_path,
-                        "content_type": content_type,
-                        "char_count": len(section_restored),
-                    },
-                )
-            )
+            chunks.append(_make_chunk(section_restored, chunk_index, heading_path))
             chunk_index += 1
         else:
             paragraphs = _split_by_paragraphs(section_text)
             merged = _merge_into_chunks(paragraphs, max_tokens, overlap, placeholders)
             for chunk_text in merged:
-                chunks.append(
-                    Chunk(
-                        content=chunk_text,
-                        chunk_index=chunk_index,
-                        metadata={
-                            "source": source,
-                            "heading_path": heading_path,
-                            "content_type": content_type,
-                            "char_count": len(chunk_text),
-                        },
-                    )
-                )
+                chunks.append(_make_chunk(chunk_text, chunk_index, heading_path))
                 chunk_index += 1
 
     return chunks

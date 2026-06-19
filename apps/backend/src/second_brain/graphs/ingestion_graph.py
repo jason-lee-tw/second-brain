@@ -38,11 +38,7 @@ def build_ingestion_graph() -> StateGraph:
 
     builder.set_entry_point("pick_file")
     builder.add_edge("pick_file", "ingest")
-    builder.add_conditional_edges(
-        "ingest",
-        _route_after_ingest,
-        {"pick_file": "pick_file", END: END},
-    )
+    builder.add_conditional_edges("ingest", _route_after_ingest)
 
     return builder.compile()
 

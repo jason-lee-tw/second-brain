@@ -26,17 +26,13 @@ async def lifespan(app: FastAPI):
     except Exception:
         _logger.warning("TracerProvider shutdown raised an exception", exc_info=True)
     try:
-        await embeddings._client.aclose()
+        await embeddings.shutdown()
     except Exception:
-        _logger.warning(
-            "embeddings._client.aclose() raised an exception", exc_info=True
-        )
+        _logger.warning("embeddings.shutdown() raised an exception", exc_info=True)
     try:
-        await ingestion_agent._anthropic.close()
+        await ingestion_agent.shutdown()
     except Exception:
-        _logger.warning(
-            "ingestion_agent._anthropic.close() raised an exception", exc_info=True
-        )
+        _logger.warning("ingestion_agent.shutdown() raised an exception", exc_info=True)
 
 
 app = FastAPI(title="Second Brain", version="0.1.0", lifespan=lifespan)
