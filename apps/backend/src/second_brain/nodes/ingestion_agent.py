@@ -1,25 +1,27 @@
+import asyncio
 import hashlib
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Optional
 
 import anthropic
 from sqlmodel import Session, select
 
+from second_brain.config import settings
 from second_brain.db.models import DocumentChunk, IngestedDocument
 from second_brain.db.session import engine
 from second_brain.graphs.state import FailedFile, IngestionState
-from second_brain.services.chunking import chunk_document
+from second_brain.services.chunking import Chunk, chunk_document
 from second_brain.services.embeddings import embed_text
 
-PENDING_DOCS_DIR = Path("temp/pending-digest-docs")
-PROCESSED_DIR = Path("temp/processed")
-FAILED_DIR = Path("temp/failed")
+PENDING_DOCS_DIR = settings.pending_docs_dir
+PROCESSED_DIR = settings.processed_dir
+FAILED_DIR = settings.failed_dir
 
 MAX_RETRIES = 3
 
-_anthropic = anthropic.AsyncAnthropic()
+_anthropic = anthropic.AsyncAnthropic(
+    api_key=settings.anthropic_api_key.get_secret_value()
+)
 
 
 def _compute_md5(content: str) -> str:
@@ -41,17 +43,40 @@ async def _generate_contextual_header(
         "Output only the header sentence, nothing else."
     )
     response = await _anthropic.messages.create(
-        model="claude-haiku-4-5",
+        model=settings.ingestion_model,
         max_tokens=150,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text.strip()
 
 
+async def _process_one_chunk(
+    chunk: Chunk, filename: str, doc_id: uuid.UUID
+) -> DocumentChunk:
+    header = await _generate_contextual_header(
+        filename=filename,
+        heading_path=chunk.metadata["heading_path"],
+        chunk_content=chunk.content,
+    )
+    embedded_text = f"{header}\n\n{chunk.content}"
+    embedding = await embed_text(embedded_text)
+    return DocumentChunk(
+        id=uuid.uuid4(),
+        doc_id=doc_id,
+        content=embedded_text,
+        embedding=embedding,
+        chunk_index=chunk.chunk_index,
+        chunk_metadata=chunk.metadata,
+        created_at=datetime.now(UTC),
+    )
+
+
 async def _do_ingest(
-    filename: str, session: Session, source_url: Optional[str] = None
+    filename: str, session: Session, source_url: str | None = None
 ) -> None:
     """Read, chunk, embed, and store one markdown file."""
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
     filepath = PENDING_DOCS_DIR / filename
     content = filepath.read_text(encoding="utf-8")
     content_hash = _compute_md5(content)
@@ -60,7 +85,6 @@ async def _do_ingest(
         select(IngestedDocument).where(IngestedDocument.content_hash == content_hash)
     ).first()
     if existing:
-        PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
         filepath.rename(PROCESSED_DIR / filename)
         return
 
@@ -81,35 +105,22 @@ async def _do_ingest(
     )
     session.flush()
 
-    for chunk in chunks:
-        header = await _generate_contextual_header(
-            filename=filename,
-            heading_path=chunk.metadata["heading_path"],
-            chunk_content=chunk.content,
-        )
-        embedded_text = f"{header}\n\n{chunk.content}"
-        embedding = await embed_text(embedded_text)
-
-        session.add(
-            DocumentChunk(
-                id=uuid.uuid4(),
-                doc_id=doc_id,
-                content=embedded_text,
-                embedding=embedding,
-                chunk_index=chunk.chunk_index,
-                chunk_metadata=chunk.metadata,  # NOTE: chunk_metadata, not metadata
-                created_at=datetime.now(UTC),
-            )
-        )
+    doc_chunks = await asyncio.gather(
+        *[_process_one_chunk(chunk, filename, doc_id) for chunk in chunks]
+    )
+    for doc_chunk in doc_chunks:
+        session.add(doc_chunk)
 
     session.commit()
 
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     filepath.rename(PROCESSED_DIR / filename)
 
 
 async def ingestion_agent_node(state: IngestionState) -> dict:
     """LangGraph node: process in_progress[0], update state on success or failure."""
+    if not state["in_progress"]:
+        raise ValueError("ingestion_agent_node called with empty in_progress")
+
     filename = state["in_progress"][0]
 
     retry_item = next(
@@ -118,9 +129,11 @@ async def ingestion_agent_node(state: IngestionState) -> dict:
     current_count: int = retry_item["retry_count"] if retry_item else 0
     new_retry_queue = [f for f in state["retry_queue"] if f["filename"] != filename]
 
+    source_url = state.get("source_urls", {}).get(filename)
+
     try:
         with Session(engine) as session:
-            await _do_ingest(filename, session)
+            await _do_ingest(filename, session, source_url=source_url)
 
         return {
             "processed": state["processed"] + [filename],
