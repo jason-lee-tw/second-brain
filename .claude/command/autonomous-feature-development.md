@@ -119,6 +119,9 @@ Read `.loop-logs/tasks/<task-id>.json`. Extract:
 git worktree add .worktrees/<task-id> -b worktree/<task-id>
 ```
 
+Switch your working directory to `.worktrees/<task-id>` for all remaining steps in this agent.
+All bash commands, file reads, and git operations MUST run from within `.worktrees/<task-id>`.
+
 Update task JSON: `"status": "in_progress"`, `"worktree": ".worktrees/<task-id>"`.
 
 #### Agent Step C — Read task content
@@ -152,6 +155,7 @@ From `plan_path`, read the full section for this task: from `### Task N: <name>`
   ### Outcome: success
   ```
 - Update task JSON: `"status": "completed"`, `"attempt": <N>`.
+- Update `completed_steps` in task JSON: append the string `"tdd-loop-complete"`.
 - Commit in the worktree directory:
   ```bash
   git add -A
@@ -159,19 +163,14 @@ From `plan_path`, read the full section for this task: from `### Task N: <name>`
   ```
 - Stop loop.
 
-**On fail (attempt < 3):**
-- Append to log:
-  ```markdown
-  ### Lint output
-  <full output>
-  ### Test output
-  <full output>
-  ### Outcome: failed — <one-line root cause>
-  ```
-- Increment `attempt` in task JSON.
-- Return to start of loop (new attempt).
+**On fail:**
+- Append full output to log (lint under `### Lint output`, test under `### Test output`)
+- Append `### Outcome: failed — <one-line root cause>`
+- Increment `attempt` in task JSON (write the new value back to the file)
+- If the new `attempt` value is less than 3: return to the start of the TDD loop (new attempt)
+- If the new `attempt` value equals 3: proceed to Hard Stop below
 
-**On fail (attempt = 3 — hard stop):**
+**Hard Stop (attempt reached 3):**
 - Append `### Outcome: HARD STOP after 3 attempts` to log.
 - Write `.loop-logs/error/<task-id>.md`:
   ```markdown
