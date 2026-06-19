@@ -78,9 +78,7 @@ async def test_crawl_and_save_slugifies_url_to_filename(tmp_path):
 async def test_crawl_url_raises_when_raw_content_is_empty_string():
     """crawl_url must raise ValueError when raw_content is an empty string."""
     with patch("second_brain.services.tavily._client") as mock_client:
-        mock_client.extract = AsyncMock(
-            return_value={"results": [{"raw_content": ""}]}
-        )
+        mock_client.extract = AsyncMock(return_value={"results": [{"raw_content": ""}]})
         from second_brain.services.tavily import crawl_url
 
         with pytest.raises(ValueError, match="empty content"):
