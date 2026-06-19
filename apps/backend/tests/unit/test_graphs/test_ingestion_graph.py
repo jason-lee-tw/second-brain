@@ -75,9 +75,7 @@ async def test_graph_retries_failed_file():
 
     async def fake_ingest_node(state):
         filename = state["in_progress"][0]
-        new_retry_queue = [
-            f for f in state["retry_queue"] if f["filename"] != filename
-        ]
+        new_retry_queue = [f for f in state["retry_queue"] if f["filename"] != filename]
         call_count["n"] += 1
 
         if call_count["n"] == 1:

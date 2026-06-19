@@ -5,6 +5,7 @@ Requirements:
     - Alembic migrations applied (alembic upgrade head)
     - Ollama and Anthropic are mocked — no live API keys required.
 """
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -97,9 +98,7 @@ async def test_full_ingest_file_success(tmp_dirs):
 
     with Session(engine) as session:
         doc = session.exec(
-            select(IngestedDocument).where(
-                IngestedDocument.filename == "test-note.md"
-            )
+            select(IngestedDocument).where(IngestedDocument.filename == "test-note.md")
         ).first()
         assert doc is not None, "IngestedDocument record must be created"
         assert doc.status == "processed"
@@ -160,9 +159,7 @@ async def test_duplicate_file_is_skipped_on_reingest(tmp_dirs):
 
     with Session(engine) as session:
         docs = session.exec(
-            select(IngestedDocument).where(
-                IngestedDocument.filename == "test-dupe.md"
-            )
+            select(IngestedDocument).where(IngestedDocument.filename == "test-dupe.md")
         ).all()
         assert len(docs) == 1, f"Expected 1 record, got {len(docs)}"
 
@@ -178,9 +175,7 @@ async def test_api_endpoint_ingest_file_returns_correct_response(tmp_dirs):
         patch(f"{node}.PENDING_DOCS_DIR", tmp_dirs["pending"]),
         patch(f"{node}.PROCESSED_DIR", tmp_dirs["processed"]),
         patch(f"{node}.FAILED_DIR", tmp_dirs["failed"]),
-        patch(
-            "second_brain.api.routers.ingest.PENDING_DOCS_DIR", tmp_dirs["pending"]
-        ),
+        patch("second_brain.api.routers.ingest.PENDING_DOCS_DIR", tmp_dirs["pending"]),
         patch(f"{node}.embed_text", AsyncMock(return_value=FAKE_EMBEDDING)),
         patch(
             f"{node}._generate_contextual_header",

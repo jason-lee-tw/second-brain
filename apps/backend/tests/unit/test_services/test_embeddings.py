@@ -16,6 +16,7 @@ async def test_embed_text_returns_list_of_1024_floats():
         mock_client.post = AsyncMock(return_value=mock_response)
 
         from second_brain.services.embeddings import embed_text
+
         result = await embed_text("hello world")
 
     assert isinstance(result, list)
@@ -36,6 +37,7 @@ async def test_embed_text_posts_to_correct_endpoint_with_correct_payload():
         mock_client.post = post_mock
 
         from second_brain.services.embeddings import embed_text
+
         await embed_text("test input")
 
     call_args = post_mock.call_args
@@ -56,5 +58,6 @@ async def test_embed_text_propagates_http_errors():
         )
 
         from second_brain.services.embeddings import embed_text
+
         with pytest.raises(httpx.HTTPStatusError):
             await embed_text("will fail")

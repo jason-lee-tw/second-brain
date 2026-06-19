@@ -42,8 +42,10 @@ async def test_ingest_file_invokes_graph_with_pending_files(tmp_path):
         "retry_queue": [],
     }
 
-    with patch("second_brain.api.routers.ingest.PENDING_DOCS_DIR", pending), \
-         patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph:
+    with (
+        patch("second_brain.api.routers.ingest.PENDING_DOCS_DIR", pending),
+        patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph,
+    ):
         mock_graph.ainvoke = AsyncMock(return_value=mock_final_state)
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -71,8 +73,10 @@ async def test_ingest_file_reports_failed_files(tmp_path):
         "retry_queue": [],
     }
 
-    with patch("second_brain.api.routers.ingest.PENDING_DOCS_DIR", pending), \
-         patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph:
+    with (
+        patch("second_brain.api.routers.ingest.PENDING_DOCS_DIR", pending),
+        patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph,
+    ):
         mock_graph.ainvoke = AsyncMock(return_value=mock_final_state)
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -97,9 +101,13 @@ async def test_ingest_url_crawls_and_invokes_graph():
 
     fake_saved_path = Path("temp/pending-digest-docs/example-com-page.md")
 
-    with patch("second_brain.api.routers.ingest.crawl_and_save",
-               AsyncMock(return_value=fake_saved_path)) as mock_crawl, \
-         patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph:
+    with (
+        patch(
+            "second_brain.api.routers.ingest.crawl_and_save",
+            AsyncMock(return_value=fake_saved_path),
+        ) as mock_crawl,
+        patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph,
+    ):
         mock_graph.ainvoke = AsyncMock(return_value=mock_final_state)
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -122,7 +130,9 @@ async def test_ingest_url_handles_single_crawl_failure_gracefully(tmp_path):
 
     async def side_effect(url):
         if "bad" in url:
-            raise ValueError("Tavily returned no content for URL: https://bad.example.com")
+            raise ValueError(
+                "Tavily returned no content for URL: https://bad.example.com"
+            )
         return good_path
 
     mock_final_state = {
@@ -145,7 +155,12 @@ async def test_ingest_url_handles_single_crawl_failure_gracefully(tmp_path):
         ) as client:
             response = await client.post(
                 "/ingest/url",
-                json={"urls": ["https://good.example.com/page", "https://bad.example.com/article"]},
+                json={
+                    "urls": [
+                        "https://good.example.com/page",
+                        "https://bad.example.com/article",
+                    ]
+                },
             )
 
     assert response.status_code == 200

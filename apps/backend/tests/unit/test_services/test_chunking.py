@@ -7,6 +7,7 @@ from second_brain.services.chunking import (
 
 # ── Content-type detection ─────────────────────────────────────────────────
 
+
 def test_detect_article_when_h1_present():
     text = "# My Heading\n\nSome paragraph text here."
     assert detect_content_type(text) == "article"
@@ -24,6 +25,7 @@ def test_detect_transcription_when_no_headings():
 
 # ── Chunk dataclass ────────────────────────────────────────────────────────
 
+
 def test_chunk_document_returns_list_of_chunk_objects():
     content = "# Doc\n\nSome content here."
     chunks = chunk_document(content, source="doc.md")
@@ -32,6 +34,7 @@ def test_chunk_document_returns_list_of_chunk_objects():
 
 
 # ── Heading path in metadata ───────────────────────────────────────────────
+
 
 def test_chunk_metadata_contains_h1_heading_path():
     content = "# Introduction\n\nSome intro text.\n"
@@ -68,16 +71,15 @@ def test_chunk_metadata_resets_h3_when_new_h2_encountered():
 
 # ── Sequential chunk index ─────────────────────────────────────────────────
 
+
 def test_chunk_indices_are_sequential_starting_at_zero():
-    content = (
-        "# A\n\nParagraph one.\n\n"
-        "## B\n\nParagraph two.\n"
-    )
+    content = "# A\n\nParagraph one.\n\n## B\n\nParagraph two.\n"
     chunks = chunk_document(content, source="doc.md")
     assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
 
 
 # ── Metadata fields ────────────────────────────────────────────────────────
+
 
 def test_chunk_metadata_contains_source_and_char_count():
     content = "# Doc\n\nContent here.\n"
@@ -101,6 +103,7 @@ def test_transcription_chunk_has_transcription_content_type():
 
 
 # ── Code fence atomicity ───────────────────────────────────────────────────
+
 
 def test_code_fence_never_split_across_chunks():
     """A code block must appear entirely within one chunk, never split."""
@@ -138,6 +141,7 @@ def test_multiple_code_fences_each_atomic():
 
 # ── Pre-heading content ────────────────────────────────────────────────────
 
+
 def test_content_before_first_heading_is_captured():
     content = "Preamble text here.\n\n# Section\n\nSection content.\n"
     chunks = chunk_document(content, source="doc.md")
@@ -146,6 +150,7 @@ def test_content_before_first_heading_is_captured():
 
 
 # ── Empty / minimal inputs ─────────────────────────────────────────────────
+
 
 def test_empty_content_returns_empty_list_or_single_empty_chunk():
     """Empty content should not crash; may return zero chunks."""

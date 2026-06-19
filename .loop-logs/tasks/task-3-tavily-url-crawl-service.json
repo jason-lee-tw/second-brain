@@ -1,0 +1,9 @@
+{
+  "task_id": "task-3-tavily-url-crawl-service",
+  "plan": "docs/superpowers/plans/2026-06-16-ticket-3-ingestion.md",
+  "spec": "docs/superpowers/specs/2026-06-16-second-brain-design.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-3-tavily-url-crawl-service",
+  "completed_steps": ["tdd-loop-complete"]
+}

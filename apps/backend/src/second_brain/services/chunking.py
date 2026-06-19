@@ -209,9 +209,7 @@ def chunk_document(content: str, source: str) -> list[Chunk]:
             chunk_index += 1
         else:
             paragraphs = _split_by_paragraphs(section_text)
-            merged = _merge_into_chunks(
-                paragraphs, max_tokens, overlap, placeholders
-            )
+            merged = _merge_into_chunks(paragraphs, max_tokens, overlap, placeholders)
             for chunk_text in merged:
                 chunks.append(
                     Chunk(
