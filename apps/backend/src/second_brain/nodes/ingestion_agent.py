@@ -67,6 +67,20 @@ async def _do_ingest(
     doc_id = uuid.uuid4()
     chunks = chunk_document(content, source=filename)
 
+    # Insert IngestedDocument first and flush so the FK constraint is satisfied
+    # before DocumentChunk rows (which reference doc_id) are inserted.
+    session.add(
+        IngestedDocument(
+            id=doc_id,
+            filename=filename,
+            source_url=source_url,
+            content_hash=content_hash,
+            status="processed",
+            ingested_at=datetime.now(UTC),
+        )
+    )
+    session.flush()
+
     for chunk in chunks:
         header = await _generate_contextual_header(
             filename=filename,
@@ -88,16 +102,6 @@ async def _do_ingest(
             )
         )
 
-    session.add(
-        IngestedDocument(
-            id=doc_id,
-            filename=filename,
-            source_url=source_url,
-            content_hash=content_hash,
-            status="processed",
-            ingested_at=datetime.now(UTC),
-        )
-    )
     session.commit()
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
