@@ -88,3 +88,142 @@ Setup complete. Found <N> tasks:
   ...
 Working branch: <current-branch>
 ```
+
+---
+
+## Stage 1: Parallel Implementation
+
+Spawn one worktree agent per task **simultaneously** using the Agent tool. Pass each agent:
+- Its `task_id`
+- The path to its task file: `.loop-logs/tasks/<task-id>.json`
+
+Do NOT run agents sequentially. All agents must start at the same time.
+
+---
+
+### Per-task Agent Instructions
+
+Each worktree agent follows these steps exactly:
+
+#### Agent Step A — Read task file
+
+Read `.loop-logs/tasks/<task-id>.json`. Extract:
+- `plan` (plan_path)
+- `spec` (spec_path)
+- `attempt` (current attempt count)
+- `task_id`
+
+#### Agent Step B — Create worktree
+
+```bash
+git worktree add .worktrees/<task-id> -b worktree/<task-id>
+```
+
+Update task JSON: `"status": "in_progress"`, `"worktree": ".worktrees/<task-id>"`.
+
+#### Agent Step C — Read task content
+
+From `plan_path`, read the full section for this task: from `### Task N: <name>` to the next `### Task` heading (or end of file). Also read the full `spec_path` for architectural context.
+
+#### Agent Step D — TDD loop (max 3 attempts)
+
+**Before each attempt:**
+- Append to `.loop-logs/logs/<task-id>.md`:
+  ```markdown
+  ## Attempt <N> — <ISO timestamp>
+  ### Implementation plan
+  <3-5 bullet points describing your approach>
+  ```
+
+**Implement:**
+1. Write the failing test first. Run it and confirm it fails with the expected reason.
+2. Write the minimal implementation to make it pass.
+3. Run verifiable signals in this order:
+   - `just lint` — must exit 0
+   - `just test-unit` — must exit 0
+
+**On pass (both signals green):**
+- Append to log:
+  ```markdown
+  ### Lint output
+  PASS
+  ### Test output
+  PASS
+  ### Outcome: success
+  ```
+- Update task JSON: `"status": "completed"`, `"attempt": <N>`.
+- Commit in the worktree directory:
+  ```bash
+  git add -A
+  git commit -m "feat(<scope>): <task description>"
+  ```
+- Stop loop.
+
+**On fail (attempt < 3):**
+- Append to log:
+  ```markdown
+  ### Lint output
+  <full output>
+  ### Test output
+  <full output>
+  ### Outcome: failed — <one-line root cause>
+  ```
+- Increment `attempt` in task JSON.
+- Return to start of loop (new attempt).
+
+**On fail (attempt = 3 — hard stop):**
+- Append `### Outcome: HARD STOP after 3 attempts` to log.
+- Write `.loop-logs/error/<task-id>.md`:
+  ```markdown
+  # Failed: <task-id>
+
+  **Task:** <task description from plan>
+  **Plan:** <plan_path>
+  **Spec:** <spec_path>
+  **Attempts:** 3
+
+  ## Attempt 1
+  <full lint + test output from log>
+  <output of: git diff>
+
+  ## Attempt 2
+  <full lint + test output from log>
+  <output of: git diff>
+
+  ## Attempt 3
+  <full lint + test output from log>
+  <output of: git diff>
+
+  ## Reproduction
+  cd <worktree path>
+  just lint
+  just test-unit
+  ```
+- Update task JSON: `"status": "failed"`.
+- Commit partial work:
+  ```bash
+  git add -A
+  git commit -m "wip: failed <task-id> after 3 attempts"
+  ```
+- Stop.
+
+---
+
+### Squash Merge (after all agents finish)
+
+Wait for all worktree agents to complete (success or hard-stop).
+
+For each task with `"status": "completed"`:
+```bash
+git merge --squash worktree/<task-id>
+git commit -m "feat(<scope>): <task description>"
+git worktree remove .worktrees/<task-id> --force
+git branch -D worktree/<task-id>
+```
+
+For each task with `"status": "failed"`:
+- Do NOT merge its worktree.
+- Log in `.loop-logs/logs/summary.md`:
+  ```
+  FAILED: <task-id> — see .loop-logs/error/<task-id>.md
+  ```
