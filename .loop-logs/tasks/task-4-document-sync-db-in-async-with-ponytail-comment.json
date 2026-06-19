@@ -1,9 +1,0 @@
-{
-  "task_id": "task-4-document-sync-db-in-async-with-ponytail-comment",
-  "plan": ".loop-logs/plans/003-review-fixes.md",
-  "spec": ".loop-logs/plans/003-review-fixes-spec.md",
-  "status": "pending",
-  "attempt": 0,
-  "worktree": null,
-  "completed_steps": []
-}

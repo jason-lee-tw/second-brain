@@ -1,9 +1,0 @@
-{
-  "task_id": "task-2-validate-urls-with-anyhttpurl",
-  "plan": ".loop-logs/plans/003-review-fixes.md",
-  "spec": ".loop-logs/plans/003-review-fixes-spec.md",
-  "status": "completed",
-  "attempt": 1,
-  "worktree": ".worktrees/task-2-validate-urls-with-anyhttpurl",
-  "completed_steps": ["tdd-loop-complete"]
-}
