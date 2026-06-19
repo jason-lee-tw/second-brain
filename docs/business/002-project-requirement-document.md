@@ -104,7 +104,7 @@ app_network:      [backend, app_postgres]
 phoenix_network:  [phoenix, phoenix_postgres]
 ```
 
-The backend never joins `phoenix_network`. OTEL traces are exported to Phoenix via host port 6006. This ensures the backend cannot directly access Phoenix's database — a deliberate security boundary that must be maintained in production.
+The backend never joins `phoenix_network`. OTEL traces are exported to Phoenix via host gRPC port 4317. This ensures the backend cannot directly access Phoenix's database — a deliberate security boundary that must be maintained in production.
 
 > **Linux note:** Requires `extra_hosts: ["host.docker.internal:host-gateway"]` on the backend service for host-port access on Linux Docker hosts.
 
@@ -409,7 +409,7 @@ Full distributed tracing at three levels per `/query` request:
 - **Agent/node level** — which agents ran, order, duration, routing decision taken
 - **Request level** — end-to-end trace from HTTP request to final response
 
-Phoenix stores trace data in `phoenix_postgres` (only accessible within `phoenix_network`). Backend exports via OTEL to Phoenix on host port 6006 — backend never joins `phoenix_network`.
+Phoenix stores trace data in `phoenix_postgres` (only accessible within `phoenix_network`). Backend exports via OTEL gRPC to Phoenix on host port 4317 — backend never joins `phoenix_network`.
 
 ---
 

@@ -51,7 +51,7 @@ Instrument the app before building features so every subsequent endpoint and Lan
 | **Goal** | A single `GET /health` request produces a visible end-to-end trace in Phoenix UI at `http://localhost:6006` |
 | **Tasks** | 5 tasks |
 | **Key deliverables** | `observability/tracing.py` with `setup_tracing()` + `@trace_node` decorator, FastAPI auto-instrumentation, `extra_hosts` for Linux Docker compatibility |
-| **Notable** | Backend reaches Phoenix via host port 6006 only — networks remain isolated; Phoenix network is never accessible to the backend container |
+| **Notable** | Backend reaches Phoenix via gRPC host port 4317 only — networks remain isolated; Phoenix network is never accessible to the backend container |
 
 ---
 

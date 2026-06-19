@@ -10,4 +10,4 @@ os.environ.setdefault(
 os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-api-key")
 os.environ.setdefault("TAVILY_API_KEY", "test-tavily-key")
-os.environ.setdefault("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006/v1/traces")
+os.environ.setdefault("PHOENIX_COLLECTION_ENDPOINT", "http://localhost:4317")

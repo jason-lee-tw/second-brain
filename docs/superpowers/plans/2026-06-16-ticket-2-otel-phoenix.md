@@ -6,7 +6,7 @@
 
 **Architecture:** A `setup_tracing()` function initialises the global OTEL `TracerProvider` once at app startup (inside the FastAPI lifespan). `FastAPIInstrumentor.instrument_app(app)` wraps the app at module level so every HTTP request automatically gets a root span. A `trace_node(name)` decorator is defined for future use wrapping async LangGraph node functions with child spans.
 
-**Tech Stack:** `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-http`, `opentelemetry-instrumentation-fastapi`, `arize-phoenix-otel`, `pytest-asyncio`
+**Tech Stack:** `opentelemetry-sdk`, `opentelemetry-instrumentation-fastapi`, `arize-phoenix-otel` (infers gRPC for port 4317), `pytest-asyncio`
 
 ---
 
@@ -15,8 +15,8 @@
 | Action | Path | Responsibility |
 |--------|------|---------------|
 | Modify | `apps/backend/pyproject.toml` | Add OTEL + Phoenix packages to dependencies |
-| Modify | `apps/backend/src/second_brain/config.py` | Add `phoenix_endpoint` field to `Settings` |
-| Modify | `apps/backend/.env.template` | Document `PHOENIX_ENDPOINT` variable |
+| Modify | `apps/backend/src/second_brain/config.py` | Add `phoenix_collection_endpoint` field to `Settings` |
+| Modify | `apps/backend/.env.template` | Document `PHOENIX_COLLECTION_ENDPOINT` variable |
 | Create | `apps/backend/src/second_brain/observability/__init__.py` | Package marker, re-exports public API |
 | Create | `apps/backend/src/second_brain/observability/tracing.py` | `setup_tracing()` + `trace_node` decorator |
 | Create | `apps/backend/tests/unit/test_observability/__init__.py` | Test package marker |
@@ -31,7 +31,7 @@
 **Files:**
 - Modify: `apps/backend/pyproject.toml`
 
-- [ ] **Step 1: Add OTEL dependencies**
+- [X] **Step 1: Add OTEL dependencies**
 
   Open `apps/backend/pyproject.toml`. Add the following packages to the `[project] dependencies` list. The rest of the file (existing deps, build config, pytest config) stays unchanged.
 
@@ -72,7 +72,7 @@
   testpaths = ["tests"]
   ```
 
-- [ ] **Step 2: Install packages**
+- [X] **Step 2: Install packages**
 
   ```bash
   cd apps/backend && uv sync
@@ -84,7 +84,7 @@
   ```
   Expected output: `OK`
 
-- [ ] **Step 3: Commit**
+- [X] **Step 3: Commit**
 
   ```bash
   git add apps/backend/pyproject.toml
@@ -93,13 +93,13 @@
 
 ---
 
-### Task 2: Extend Settings with phoenix_endpoint
+### Task 2: Extend Settings with phoenix_collection_endpoint
 
 **Files:**
 - Modify: `apps/backend/src/second_brain/config.py`
 - Modify: `apps/backend/.env.template`
 
-- [ ] **Step 1: Add `phoenix_endpoint` to `Settings`**
+- [X] **Step 1: Add `phoenix_collection_endpoint` to `Settings`**
 
   Replace the full contents of `apps/backend/src/second_brain/config.py`:
 
@@ -114,7 +114,7 @@
       tavily_api_key: str
       # OTEL collector endpoint — backend reaches Phoenix via host port 6006.
       # On Linux Docker hosts, 'host.docker.internal' resolves via extra_hosts.
-      phoenix_endpoint: str = "http://host.docker.internal:6006/v1/traces"
+      phoenix_collection_endpoint: str = "http://host.docker.internal:4317"
 
       model_config = SettingsConfigDict(env_file=".env")
 
@@ -122,7 +122,7 @@
   settings = Settings()
   ```
 
-- [ ] **Step 2: Update `.env.template`**
+- [X] **Step 2: Update `.env.template`**
 
   Replace the full contents of `apps/backend/.env.template`:
 
@@ -132,10 +132,10 @@
   ANTHROPIC_API_KEY="your-anthropic-api-key-here"
   TAVILY_API_KEY="your-tavily-api-key-here"
   # Arize Phoenix OTEL collector. Override on Linux if host.docker.internal doesn't resolve.
-  PHOENIX_ENDPOINT="http://host.docker.internal:6006/v1/traces"
+  PHOENIX_COLLECTION_ENDPOINT="http://host.docker.internal:4317"
   ```
 
-- [ ] **Step 3: Verify settings load**
+- [X] **Step 3: Verify settings load**
 
   ```bash
   cd apps/backend && python -c "
@@ -145,17 +145,17 @@
       anthropic_api_key='test',
       tavily_api_key='test',
   )
-  print(s.phoenix_endpoint)
+  print(s.phoenix_collection_endpoint)
   "
   ```
 
-  Expected output: `http://host.docker.internal:6006/v1/traces`
+  Expected output: `http://host.docker.internal:4317`
 
-- [ ] **Step 4: Commit**
+- [X] **Step 4: Commit**
 
   ```bash
   git add apps/backend/src/second_brain/config.py apps/backend/.env.template
-  git commit -m "feat: add phoenix_endpoint to Settings"
+  git commit -m "feat: add phoenix_collection_endpoint to Settings"
   ```
 
 ---
@@ -168,14 +168,14 @@
 - Create: `apps/backend/tests/unit/test_observability/__init__.py`
 - Create: `apps/backend/tests/unit/test_observability/test_tracing.py`
 
-- [ ] **Step 1: Create directories**
+- [X] **Step 1: Create directories**
 
   ```bash
   mkdir -p apps/backend/src/second_brain/observability
   mkdir -p apps/backend/tests/unit/test_observability
   ```
 
-- [ ] **Step 2: Write failing tests**
+- [X] **Step 2: Write failing tests**
 
   Create `apps/backend/tests/unit/test_observability/__init__.py` (empty file):
 
@@ -224,11 +224,11 @@
               "second_brain.observability.tracing.register",
               return_value=mock_provider,
           ) as mock_register:
-              result = setup_tracing(phoenix_endpoint="http://localhost:6006/v1/traces")
+              result = setup_tracing(phoenix_collection_endpoint="http://localhost:4317")
 
           mock_register.assert_called_once_with(
               project_name="second-brain",
-              endpoint="http://localhost:6006/v1/traces",
+              endpoint="http://localhost:4317",
           )
           assert result is mock_provider
 
@@ -240,13 +240,13 @@
               return_value=mock_provider,
           ) as mock_register:
               setup_tracing(
-                  phoenix_endpoint="http://localhost:6006/v1/traces",
+                  phoenix_collection_endpoint="http://localhost:4317",
                   service_name="my-service",
               )
 
           mock_register.assert_called_once_with(
               project_name="my-service",
-              endpoint="http://localhost:6006/v1/traces",
+              endpoint="http://localhost:4317",
           )
 
 
@@ -298,7 +298,7 @@
           assert my_special_node.__name__ == "my_special_node"
   ```
 
-- [ ] **Step 3: Run tests — verify they fail**
+- [X] **Step 3: Run tests — verify they fail**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py -v
@@ -309,7 +309,7 @@
   ModuleNotFoundError: No module named 'second_brain.observability'
   ```
 
-- [ ] **Step 4: Create the observability package marker**
+- [X] **Step 4: Create the observability package marker**
 
   Create `apps/backend/src/second_brain/observability/__init__.py`:
 
@@ -321,7 +321,7 @@
   __all__ = ["setup_tracing", "trace_node"]
   ```
 
-- [ ] **Step 5: Run tests again — verify updated failure**
+- [X] **Step 5: Run tests again — verify updated failure**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py -v
@@ -332,7 +332,7 @@
   ModuleNotFoundError: No module named 'second_brain.observability.tracing'
   ```
 
-- [ ] **Step 6: Implement `tracing.py`**
+- [X] **Step 6: Implement `tracing.py`**
 
   Create `apps/backend/src/second_brain/observability/tracing.py`:
 
@@ -348,7 +348,7 @@
 
 
   def setup_tracing(
-      phoenix_endpoint: str,
+      phoenix_collection_endpoint: str,
       service_name: str = "second-brain",
   ) -> TracerProvider:
       """Configure the global OTEL TracerProvider with Phoenix as the trace backend.
@@ -356,8 +356,8 @@
       Call once at app startup (inside the FastAPI lifespan).
 
       Args:
-          phoenix_endpoint: OTLP HTTP collector URL, e.g.
-              ``http://host.docker.internal:6006/v1/traces``.
+          phoenix_collection_endpoint: OTLP gRPC collector URL, e.g.
+              ``http://host.docker.internal:4317``.
               The backend reaches Phoenix via the Docker host port — the two
               services are on isolated networks by design.
           service_name: The service name shown in the Phoenix UI.
@@ -368,7 +368,7 @@
       """
       provider: TracerProvider = register(
           project_name=service_name,
-          endpoint=phoenix_endpoint,
+          endpoint=phoenix_collection_endpoint,
       )
       return provider
 
@@ -398,7 +398,7 @@
       return decorator
   ```
 
-- [ ] **Step 7: Run tests — verify they pass**
+- [X] **Step 7: Run tests — verify they pass**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py -v
@@ -415,7 +415,7 @@
   6 passed in ...
   ```
 
-- [ ] **Step 8: Commit**
+- [X] **Step 8: Commit**
 
   ```bash
   git add \
@@ -434,7 +434,7 @@
 - Modify: `apps/backend/src/second_brain/main.py`
 - Modify: `apps/backend/tests/unit/test_observability/test_tracing.py`
 
-- [ ] **Step 1: Write failing test — add FastAPI instrumentation test to `test_tracing.py`**
+- [X] **Step 1: Write failing test — add FastAPI instrumentation test to `test_tracing.py`**
 
   Append the following class to the **end** of `apps/backend/tests/unit/test_observability/test_tracing.py` (after `TestTraceNode`):
 
@@ -514,7 +514,7 @@
               exporter.clear()
   ```
 
-- [ ] **Step 2: Run new tests — verify they fail**
+- [X] **Step 2: Run new tests — verify they fail**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py::TestFastAPIInstrumentation -v
@@ -527,7 +527,7 @@
 
   (The first test `test_http_request_emits_span` will pass because it doesn't depend on `main.py`; the second will fail because `main.py` doesn't import `setup_tracing` yet.)
 
-- [ ] **Step 3: Implement `main.py` changes**
+- [X] **Step 3: Implement `main.py` changes**
 
   Replace the full contents of `apps/backend/src/second_brain/main.py`:
 
@@ -545,7 +545,7 @@
   async def lifespan(app: FastAPI):
       # Initialise the global OTEL TracerProvider once at startup.
       # All subsequent spans (HTTP middleware, trace_node decorators) use this provider.
-      setup_tracing(phoenix_endpoint=settings.phoenix_endpoint)
+      setup_tracing(phoenix_collection_endpoint=settings.phoenix_collection_endpoint)
       yield
 
 
@@ -561,7 +561,7 @@
       return {"status": "ok"}
   ```
 
-- [ ] **Step 4: Run all observability tests — verify they pass**
+- [X] **Step 4: Run all observability tests — verify they pass**
 
   ```bash
   cd apps/backend && pytest tests/unit/test_observability/test_tracing.py -v
@@ -580,7 +580,7 @@
   8 passed in ...
   ```
 
-- [ ] **Step 5: Commit**
+- [X] **Step 5: Commit**
 
   ```bash
   git add \
@@ -598,7 +598,7 @@
 
 **Context:** On Linux Docker hosts, containers cannot reach the host machine via `host.docker.internal` unless it is explicitly mapped. Docker Desktop (Mac/Windows) provides this automatically. Adding `extra_hosts: ["host.docker.internal:host-gateway"]` to the backend service makes the hostname resolve on Linux without breaking Mac/Windows.
 
-- [ ] **Step 1: Add `extra_hosts` to the backend service**
+- [X] **Step 1: Add `extra_hosts` to the backend service**
 
   In `docker-compose.yml`, locate the `backend` service and add `extra_hosts`. Below is the complete file reflecting the state after Ticket 1 plus the Ticket 2 addition:
 
@@ -703,11 +703,11 @@
   ```
 
   Look for OTEL export errors. Common causes:
-  - `phoenix_endpoint` env var overridden in `.env` to a wrong value
+  - `phoenix_collection_endpoint` env var overridden in `.env` to a wrong value
   - Phoenix container not healthy (`docker compose ps phoenix`)
   - On Linux: `host.docker.internal` not resolving (verify `extra_hosts` was applied with `docker inspect <backend-container>`)
 
-- [ ] **Step 3: Commit**
+- [X] **Step 3: Commit**
 
   ```bash
   git add docker-compose.yml
@@ -724,8 +724,8 @@
 | `trace_node` decorator in `observability/tracing.py` | Task 3 Step 6 |
 | `main.py` calls `setup_tracing()` in lifespan | Task 4 Step 3 |
 | FastAPI auto-instrumentation (`FastAPIInstrumentor`) | Task 4 Step 3 |
-| `config.py` `phoenix_endpoint` field | Task 2 Step 1 |
-| `.env.template` `PHOENIX_ENDPOINT` entry | Task 2 Step 2 |
+| `config.py` `phoenix_collection_endpoint` field (gRPC, port 4317) | Task 2 Step 1 |
+| `.env.template` `PHOENIX_COLLECTION_ENDPOINT` entry | Task 2 Step 2 |
 | `docker-compose.yml` `extra_hosts` for backend | Task 5 Step 1 |
 | Test: TracerProvider is configured | Task 3 (`TestSetupTracing`) |
 | Test: `trace_node` creates spans | Task 3 (`TestTraceNode`) |

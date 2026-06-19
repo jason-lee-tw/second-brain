@@ -106,7 +106,7 @@ graph TD
     IU --> IG
     QG --> PG
     IG --> PG
-    LG -. "OTEL via host port 6006" .-> PH
+    LG -. "OTEL gRPC via host port 4317" .-> PH
 ```
 
 ### Docker Networks
@@ -116,7 +116,7 @@ app_network: [backend, app_postgres]
 phoenix_network: [phoenix, phoenix_postgres]
 ```
 
-The two networks are fully isolated — the backend has no access to `phoenix_network`. The backend exports OTEL traces to Phoenix via the **host port** (Phoenix exposes port 6006 on the host). This is intentional: in production, the backend must never have direct network access to Phoenix or its database.
+The two networks are fully isolated — the backend has no access to `phoenix_network`. The backend exports OTEL traces to Phoenix via gRPC on the **host port 4317** (Phoenix also exposes its UI on port 6006). This is intentional: in production, the backend must never have direct network access to Phoenix or its database.
 
 > **Linux note:** On Linux Docker hosts, the backend service requires `extra_hosts: ["host.docker.internal:host-gateway"]` in `docker-compose.yml` to reach the host port. Docker Desktop (Mac/Windows) provides this automatically.
 
@@ -435,7 +435,7 @@ Full distributed tracing across three levels per `/query` request:
 - **Request level** — end-to-end trace from HTTP request to response
 
 Phoenix stores trace data in `phoenix_postgres` (isolated, only accessible within `phoenix_network`).  
-Backend exports traces to Phoenix via OTEL exporter targeting the **host port** — backend never joins `phoenix_network`.  
+Backend exports traces to Phoenix via OTEL gRPC exporter targeting **host port 4317** — backend never joins `phoenix_network`.  
 Phoenix UI exposed on host port 6006.
 
 ---
