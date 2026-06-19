@@ -1,4 +1,5 @@
 """Tests for FastAPI app lifespan — verifies client teardown on shutdown."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

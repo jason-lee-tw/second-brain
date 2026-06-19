@@ -61,3 +61,35 @@ async def test_embed_text_propagates_http_errors():
 
         with pytest.raises(httpx.HTTPStatusError):
             await embed_text("will fail")
+
+
+@pytest.mark.asyncio
+async def test_embed_text_raises_value_error_on_ollama_error_body():
+    """embed_text must raise ValueError when Ollama returns HTTP 200 with error body."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"error": "model not found"}
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("second_brain.services.embeddings._client") as mock_client:
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        from second_brain.services.embeddings import embed_text
+
+        with pytest.raises(ValueError, match="model not found"):
+            await embed_text("hello world")
+
+
+@pytest.mark.asyncio
+async def test_embed_text_raises_value_error_on_missing_embedding_key():
+    """embed_text must raise ValueError when Ollama response has no 'embedding' key."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"model": "qwen3-embedding:0.6b"}
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("second_brain.services.embeddings._client") as mock_client:
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        from second_brain.services.embeddings import embed_text
+
+        with pytest.raises(ValueError, match="missing 'embedding' key"):
+            await embed_text("hello world")

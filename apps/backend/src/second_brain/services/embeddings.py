@@ -17,4 +17,9 @@ async def embed_text(text: str) -> list[float]:
         json={"model": settings.embedding_model, "prompt": text},
     )
     response.raise_for_status()
-    return response.json()["embedding"]
+    data = response.json()
+    if "error" in data:
+        raise ValueError(f"Ollama error: {data['error']}")
+    if "embedding" not in data:
+        raise ValueError(f"Ollama response missing 'embedding' key: {data}")
+    return data["embedding"]
