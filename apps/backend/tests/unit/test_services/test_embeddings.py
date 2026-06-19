@@ -1,0 +1,73 @@
+# apps/backend/tests/unit/test_services/test_embeddings.py
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_embed_text_returns_list_of_1024_floats():
+    """embed_text must return a List[float] of length 1024."""
+    fake_embedding = [0.1] * 1024
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"embedding": fake_embedding}
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("second_brain.services.embeddings.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        from second_brain.services.embeddings import embed_text
+
+        result = await embed_text("hello world")
+
+    assert isinstance(result, list)
+    assert len(result) == 1024
+    assert all(isinstance(v, float) for v in result)
+
+
+@pytest.mark.asyncio
+async def test_embed_text_posts_to_correct_endpoint_with_correct_payload():
+    """embed_text must POST to /api/embeddings with model=qwen3-embedding:0.6b."""
+    fake_embedding = [0.0] * 1024
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"embedding": fake_embedding}
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("second_brain.services.embeddings.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        post_mock = AsyncMock(return_value=mock_response)
+        mock_client.post = post_mock
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        from second_brain.services.embeddings import embed_text
+
+        await embed_text("test input")
+
+    call_args = post_mock.call_args
+    assert "/api/embeddings" in call_args[0][0]
+    payload = call_args[1]["json"]
+    assert payload["model"] == "qwen3-embedding:0.6b"
+    assert payload["prompt"] == "test input"
+
+
+@pytest.mark.asyncio
+async def test_embed_text_propagates_http_errors():
+    """embed_text must not swallow HTTP errors."""
+    with patch("second_brain.services.embeddings.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "500 Server Error", request=MagicMock(), response=MagicMock()
+            )
+        )
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        from second_brain.services.embeddings import embed_text
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await embed_text("will fail")
