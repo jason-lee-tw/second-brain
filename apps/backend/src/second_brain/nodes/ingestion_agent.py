@@ -108,9 +108,7 @@ async def _process_one_chunk(
     )
 
 
-async def _do_ingest(
-    filename: str, source_url: str | None = None
-) -> None:
+async def _do_ingest(filename: str, source_url: str | None = None) -> None:
     """Read, chunk, embed, and store one markdown file."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
