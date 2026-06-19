@@ -1,0 +1,11 @@
+{
+  "task_id": "task-1-make-url-to-slug-public",
+  "plan": ".loop-logs/plans/003-review-fixes.md",
+  "spec": ".loop-logs/plans/003-review-fixes-spec.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-1-make-url-to-slug-public",
+  "completed_steps": [
+    "tdd-loop-complete"
+  ]
+}

@@ -1,6 +1,25 @@
 # Complex Review Summary
 
 **Date:** 2026-06-19
+
+## Round 2 (feat/003-ingestion post-review-fixes)
+
+**Issues found:** 10
+**Issues fixed:** 10
+**Review rounds:** 2 (plan review + implementation code review per group)
+
+### Groups
+- **Group A** (I1+I2+I6+I7+I8): async DB via `asyncio.to_thread`, `_CHUNK_SEMAPHORE`, inline helper, `in_progress: str | None`, remove config dirs
+- **Group B** (I3+I4): Tavily empty-content ValueError, URL hash slug uniqueness
+- **Group C** (I5): Ollama error-body ValueError guard
+- **Group D** (I9+I10): `model_copy` for response merge, always include `source_urls`
+
+**Final state:** 85 unit tests pass, lint clean, 11 ACs verified on running system.
+
+---
+
+## Round 1 (original complex review)
+
 **Issues found:** 26 (3 MUST FIX, 9 SHOULD FIX, 14 NICE TO HAVE)
 **Issues fixed:** 22 (all MUST FIX + SHOULD FIX + selected NICE TO HAVE)
 **Review rounds:** 1
