@@ -14,13 +14,13 @@ def pick_file_node(state: IngestionState) -> dict:
     if state["files"]:
         return {
             "files": state["files"][1:],
-            "in_progress": [state["files"][0]],
+            "in_progress": state["files"][0],
         }
     if state["retry_queue"]:
         return {
-            "in_progress": [state["retry_queue"][0]["filename"]],
+            "in_progress": state["retry_queue"][0]["filename"],
         }
-    return {"in_progress": []}
+    return {"in_progress": None}
 
 
 def _route_after_ingest(state: IngestionState) -> str:

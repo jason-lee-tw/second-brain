@@ -16,8 +16,6 @@ class Settings(BaseSettings):
 
     # Directory paths for ingestion pipeline
     pending_docs_dir: Path = Path("temp/pending-digest-docs")
-    processed_dir: Path = Path("temp/processed")
-    failed_dir: Path = Path("temp/failed")
 
     # Model names
     ingestion_model: str = "claude-haiku-4-5"

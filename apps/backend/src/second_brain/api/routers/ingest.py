@@ -21,7 +21,7 @@ async def _run_ingestion(
     """Run the ingestion graph and return a response."""
     initial_state: IngestionState = {
         "files": files,
-        "in_progress": [],
+        "in_progress": None,
         "processed": [],
         "retry_queue": [],
         "failed": [],

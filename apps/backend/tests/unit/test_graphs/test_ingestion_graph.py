@@ -9,7 +9,7 @@ from second_brain.graphs.state import IngestionState
 def _make_state(**overrides) -> IngestionState:
     base: IngestionState = {
         "files": [],
-        "in_progress": [],
+        "in_progress": None,
         "processed": [],
         "retry_queue": [],
         "failed": [],
@@ -26,10 +26,10 @@ async def test_graph_processes_single_file():
     """Graph with one file in files[] should result in that file in processed."""
 
     async def fake_ingest_node(state):
-        filename = state["in_progress"][0]
+        filename = state["in_progress"]
         return {
             "processed": state["processed"] + [filename],
-            "in_progress": [],
+            "in_progress": None,
             "retry_queue": state["retry_queue"],
         }
 
@@ -42,7 +42,7 @@ async def test_graph_processes_single_file():
 
     assert "a.md" in result["processed"]
     assert result["failed"] == []
-    assert result["in_progress"] == []
+    assert result["in_progress"] is None
 
 
 @pytest.mark.asyncio
@@ -50,10 +50,10 @@ async def test_graph_processes_multiple_files_sequentially():
     """Graph with two files must process both."""
 
     async def fake_ingest_node(state):
-        filename = state["in_progress"][0]
+        filename = state["in_progress"]
         return {
             "processed": state["processed"] + [filename],
-            "in_progress": [],
+            "in_progress": None,
             "retry_queue": [],
         }
 
@@ -74,20 +74,20 @@ async def test_graph_retries_failed_file():
     call_count = {"n": 0}
 
     async def fake_ingest_node(state):
-        filename = state["in_progress"][0]
+        filename = state["in_progress"]
         new_retry_queue = [f for f in state["retry_queue"] if f["filename"] != filename]
         call_count["n"] += 1
 
         if call_count["n"] == 1:
             return {
-                "in_progress": [],
+                "in_progress": None,
                 "retry_queue": new_retry_queue
                 + [{"filename": filename, "error": "transient", "retry_count": 1}],
             }
         else:
             return {
                 "processed": state["processed"] + [filename],
-                "in_progress": [],
+                "in_progress": None,
                 "retry_queue": new_retry_queue,
             }
 
@@ -108,10 +108,10 @@ async def test_graph_terminates_when_all_files_done():
     """Graph must terminate (not loop forever) once all files are processed."""
 
     async def fake_ingest_node(state):
-        filename = state["in_progress"][0]
+        filename = state["in_progress"]
         return {
             "processed": state["processed"] + [filename],
-            "in_progress": [],
+            "in_progress": None,
             "retry_queue": [],
         }
 

@@ -1,4 +1,5 @@
 # apps/backend/tests/unit/test_nodes/test_ingestion_agent.py
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,13 +10,21 @@ from second_brain.graphs.state import IngestionState
 def _make_state(**overrides) -> IngestionState:
     base: IngestionState = {
         "files": [],
-        "in_progress": [],
+        "in_progress": None,
         "processed": [],
         "retry_queue": [],
         "failed": [],
     }
     base.update(overrides)
     return base
+
+
+def test_chunk_semaphore_is_bounded():
+    """_CHUNK_SEMAPHORE must be bounded by _CHUNK_CONCURRENCY."""
+    from second_brain.nodes.ingestion_agent import _CHUNK_CONCURRENCY, _CHUNK_SEMAPHORE
+
+    assert isinstance(_CHUNK_SEMAPHORE, asyncio.Semaphore)
+    assert _CHUNK_SEMAPHORE._value == _CHUNK_CONCURRENCY
 
 
 @pytest.mark.asyncio
@@ -42,6 +51,7 @@ async def test_successful_ingest_moves_file_to_processed(tmp_path):
             AsyncMock(return_value=fake_header),
         ),
         patch("second_brain.nodes.ingestion_agent.Session") as mock_session_cls,
+        patch("asyncio.to_thread", wraps=asyncio.to_thread) as mock_to_thread,
     ):
         mock_session = MagicMock()
         mock_session.__enter__ = MagicMock(return_value=mock_session)
@@ -51,12 +61,13 @@ async def test_successful_ingest_moves_file_to_processed(tmp_path):
 
         from second_brain.nodes.ingestion_agent import ingestion_agent_node
 
-        state = _make_state(in_progress=["note.md"])
+        state = _make_state(in_progress="note.md")
         result = await ingestion_agent_node(state)
 
     assert "note.md" in result["processed"]
-    assert result["in_progress"] == []
+    assert result["in_progress"] is None
     assert (processed / "note.md").exists()
+    assert mock_to_thread.call_count >= 2  # duplicate check + write results
 
 
 @pytest.mark.asyncio
@@ -85,7 +96,7 @@ async def test_duplicate_file_is_skipped_and_moved_to_processed(tmp_path):
 
         from second_brain.nodes.ingestion_agent import ingestion_agent_node
 
-        state = _make_state(in_progress=["dupe.md"])
+        state = _make_state(in_progress="dupe.md")
         result = await ingestion_agent_node(state)
 
     mock_embed.assert_not_called()
@@ -120,10 +131,10 @@ async def test_first_failure_goes_to_retry_queue(tmp_path):
 
         from second_brain.nodes.ingestion_agent import ingestion_agent_node
 
-        state = _make_state(in_progress=["bad.md"])
+        state = _make_state(in_progress="bad.md")
         result = await ingestion_agent_node(state)
 
-    assert result["in_progress"] == []
+    assert result["in_progress"] is None
     retry_entries = [f for f in result["retry_queue"] if f["filename"] == "bad.md"]
     assert len(retry_entries) == 1
     assert retry_entries[0]["retry_count"] == 1
@@ -162,12 +173,12 @@ async def test_third_failure_moves_to_failed_and_moves_file(tmp_path):
 
         # Simulate already at retry_count=2 (next failure hits limit of 3)
         state = _make_state(
-            in_progress=["broken.md"],
+            in_progress="broken.md",
             retry_queue=[{"filename": "broken.md", "error": "err", "retry_count": 2}],
         )
         result = await ingestion_agent_node(state)
 
-    assert result["in_progress"] == []
+    assert result["in_progress"] is None
     assert result["retry_queue"] == []
     failed_entries = [f for f in result["failed"] if f["filename"] == "broken.md"]
     assert len(failed_entries) == 1

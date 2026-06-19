@@ -38,7 +38,7 @@ async def test_ingest_file_invokes_graph_with_pending_files(tmp_path):
         "processed": ["doc1.md", "doc2.md"],
         "failed": [],
         "files": [],
-        "in_progress": [],
+        "in_progress": None,
         "retry_queue": [],
     }
 
@@ -69,7 +69,7 @@ async def test_ingest_file_reports_failed_files(tmp_path):
         "processed": [],
         "failed": [{"filename": "bad.md", "error": "err", "retry_count": 3}],
         "files": [],
-        "in_progress": [],
+        "in_progress": None,
         "retry_queue": [],
     }
 
@@ -95,7 +95,7 @@ async def test_ingest_url_crawls_and_invokes_graph():
         "processed": ["example-com-page.md"],
         "failed": [],
         "files": [],
-        "in_progress": [],
+        "in_progress": None,
         "retry_queue": [],
     }
 
@@ -139,7 +139,7 @@ async def test_ingest_url_handles_single_crawl_failure_gracefully(tmp_path):
         "processed": ["good-url.md"],
         "failed": [],
         "files": [],
-        "in_progress": [],
+        "in_progress": None,
         "retry_queue": [],
     }
 
