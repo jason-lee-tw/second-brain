@@ -3,12 +3,29 @@
   "permissions": {
     "deny": [
       "Read(*.env)",
-      "Edit(*/.env)"
+      "Edit(*/.env)",
+      "Bash(git push:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(rm -rf:*)"
+    ],
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(pytest:*)",
+      "Bash(uv:*)",
+      "Bash(just:*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)"
     ],
     "defaultMode": "auto"
   },
   "model": "sonnet[1m]",
+  "effortLevel": "max",
   "enabledPlugins": {
-    "ponytail@ponytail": true
+    "ponytail@ponytail": true,
+    "verifying-implementation@verifying-implementation": true
   }
 }
