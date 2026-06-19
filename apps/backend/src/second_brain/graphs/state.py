@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class FailedFile(TypedDict):
@@ -13,3 +13,5 @@ class IngestionState(TypedDict):
     processed: list[str]            # successfully ingested filenames
     retry_queue: list[FailedFile]   # retry_count < 3 (terminal threshold)
     failed: list[FailedFile]        # terminal failures: retry_count >= 3
+    # filename -> original URL; absent for local-file ingestion
+    source_urls: NotRequired[dict[str, str]]

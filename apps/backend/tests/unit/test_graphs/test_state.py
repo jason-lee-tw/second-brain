@@ -41,3 +41,16 @@ def test_ingestion_state_with_failed_file_in_retry_queue():
         "failed": [],
     }
     assert state["retry_queue"][0]["retry_count"] == 1
+
+
+def test_ingestion_state_with_source_urls():
+    """IngestionState accepts optional source_urls mapping."""
+    state: IngestionState = {
+        "files": [],
+        "in_progress": [],
+        "processed": [],
+        "retry_queue": [],
+        "failed": [],
+        "source_urls": {"article.md": "https://example.com/article"},
+    }
+    assert state["source_urls"]["article.md"] == "https://example.com/article"
