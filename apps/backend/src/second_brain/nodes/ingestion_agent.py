@@ -132,6 +132,7 @@ async def ingestion_agent_node(state: IngestionState) -> dict:
     source_url = state.get("source_urls", {}).get(filename)
 
     try:
+        # ponytail: sync Session in async fn — swap to AsyncSession for multi-file load
         with Session(engine) as session:
             await _do_ingest(filename, session, source_url=source_url)
 
