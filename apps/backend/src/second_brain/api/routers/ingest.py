@@ -7,7 +7,7 @@ from second_brain.api.schemas import IngestFileResponse, IngestUrlRequest
 from second_brain.config import settings
 from second_brain.graphs.ingestion_graph import ingestion_graph
 from second_brain.graphs.state import IngestionState
-from second_brain.services.tavily import _url_to_slug, crawl_and_save
+from second_brain.services.tavily import crawl_and_save, url_to_slug
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
@@ -61,7 +61,7 @@ async def ingest_url(request: IngestUrlRequest) -> IngestFileResponse:
 
     for url, result in zip(request.urls, results):
         if isinstance(result, Exception):
-            failed_crawl_names.append(f"{_url_to_slug(url)}.md")
+            failed_crawl_names.append(f"{url_to_slug(url)}.md")
         else:
             saved_paths.append(result)
             source_urls[result.name] = url

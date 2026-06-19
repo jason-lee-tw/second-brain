@@ -10,7 +10,7 @@ PENDING_DOCS_DIR = settings.pending_docs_dir  # patchable in tests
 _client = AsyncTavilyClient(api_key=settings.tavily_api_key.get_secret_value())
 
 
-def _url_to_slug(url: str) -> str:
+def url_to_slug(url: str) -> str:
     """Convert a URL into a safe filename stem (max 80 chars)."""
     slug = re.sub(r"https?://", "", url)
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", slug)
@@ -33,7 +33,7 @@ async def crawl_url(url: str) -> str:
 async def crawl_and_save(url: str) -> Path:
     """Crawl a URL and save the content as a markdown file."""
     content = await crawl_url(url)
-    slug = _url_to_slug(url)
+    slug = url_to_slug(url)
     filepath = PENDING_DOCS_DIR / f"{slug}.md"
     PENDING_DOCS_DIR.mkdir(parents=True, exist_ok=True)
     filepath.write_text(content, encoding="utf-8")
