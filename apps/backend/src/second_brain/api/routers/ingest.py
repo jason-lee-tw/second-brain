@@ -61,6 +61,8 @@ async def ingest_url(request: IngestUrlRequest) -> IngestFileResponse:
 
     for url, result in zip(request.urls, results):
         if isinstance(result, Exception):
+            # note: failed-crawl names use slug-only (no hash);
+            # they are best-effort error labels
             failed_crawl_names.append(f"{url_to_slug(str(url))}.md")
         else:
             saved_paths.append(result)

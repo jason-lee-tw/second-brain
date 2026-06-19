@@ -1,3 +1,4 @@
+import hashlib
 import re
 from pathlib import Path
 
@@ -22,19 +23,24 @@ async def crawl_url(url: str) -> str:
 
     Raises:
         ValueError: If Tavily returns no results for the URL.
+        ValueError: If Tavily returns empty content for the URL.
     """
     response = await _client.extract(urls=[url])
     results = response.get("results", [])
     if not results:
         raise ValueError(f"Tavily returned no content for URL: {url}")
-    return results[0].get("raw_content", "")
+    content = results[0].get("raw_content", "")
+    if not content.strip():
+        raise ValueError(f"Tavily returned empty content for URL: {url}")
+    return content
 
 
 async def crawl_and_save(url: str) -> Path:
     """Crawl a URL and save the content as a markdown file."""
     content = await crawl_url(url)
     slug = url_to_slug(url)
-    filepath = PENDING_DOCS_DIR / f"{slug}.md"
+    hash8 = hashlib.sha256(url.encode()).hexdigest()[-8:]
+    filepath = PENDING_DOCS_DIR / f"{slug}_{hash8}.md"
     PENDING_DOCS_DIR.mkdir(parents=True, exist_ok=True)
     filepath.write_text(content, encoding="utf-8")
     return filepath
