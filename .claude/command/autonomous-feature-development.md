@@ -226,3 +226,135 @@ For each task with `"status": "failed"`:
   ```
   FAILED: <task-id> — see .loop-logs/error/<task-id>.md
   ```
+
+---
+
+## Stage 2: Verification
+
+Run the `/verifying-implementation:verifying-implementation` skill.
+
+The skill boots the system and exercises the changed endpoints/paths. Match observed output against the acceptance criteria in `spec_path`.
+
+**If verification passes:** Proceed to Stage 3.
+
+**If verification fails:**
+1. Analyze the root cause from the verification output.
+2. Spawn a fix worktree agent using the same TDD mini-loop as Stage 1 (single task, targeting the root cause).
+3. Squash-merge the fix:
+   ```bash
+   git merge --squash worktree/verification-fix-<round>
+   git commit -m "fix: address verification failure round <round>"
+   git worktree remove .worktrees/verification-fix-<round> --force
+   git branch -D worktree/verification-fix-<round>
+   ```
+4. Re-run verification.
+5. Repeat up to **3 rounds total**.
+
+**If still failing after 3 rounds:**
+- Write `.loop-logs/error/verification-failure.md`:
+  ```markdown
+  # Verification Failed After 3 Rounds
+
+  **Spec:** <spec_path>
+
+  ## Round 1
+  <full verification output>
+
+  ## Round 2
+  <full verification output>
+
+  ## Round 3
+  <full verification output>
+  ```
+- Commit: `wip: verification failed after 3 rounds — see .loop-logs/error/verification-failure.md`
+- Stop.
+
+---
+
+## Stage 3: Complex Review
+
+Run the `/complex-review` command on the current feature branch.
+
+After complex-review completes, append to `.loop-logs/logs/complex-review.md`:
+
+```markdown
+# Complex Review Summary
+
+**Date:** <timestamp>
+**Issues found:** <N>
+**Issues fixed:** <N>
+**Review rounds:** <N>
+```
+
+---
+
+## Stage 4: Final Commit
+
+### Step 4.1 — Final lint and format
+
+```bash
+just lint    # must exit 0
+just format  # must exit 0
+```
+
+If either fails, fix the issues before proceeding.
+
+### Step 4.2 — Write summary
+
+Write `.loop-logs/logs/summary.md`:
+
+```markdown
+# Loop Summary
+
+**Plan:** <plan_path>
+**Spec:** <spec_path>
+**Branch:** <branch name>
+**Date:** <timestamp>
+
+## Tasks
+
+| Task | Status | Attempts |
+|------|--------|----------|
+| <task-id> | completed / failed | N |
+
+**Completed:** N/total
+**Failed:** N/total (see .loop-logs/error/ for details)
+
+## Verification
+Rounds: N
+
+## Review
+Rounds: N
+```
+
+### Step 4.3 — Commit
+
+Stage everything:
+```bash
+git add -A
+```
+
+**If all tasks completed successfully:**
+```bash
+git commit -m "feat(<scope>): <description derived from plan Goal line>"
+```
+
+**If any tasks failed (partial):**
+```bash
+git commit -m "wip: partial — <completed>/<total> tasks completed
+
+Failed tasks:
+<task-id-1>: see .loop-logs/error/<task-id-1>.md
+<task-id-2>: see .loop-logs/error/<task-id-2>.md"
+```
+
+---
+
+## Hard Rules
+
+1. Never delete tests to make them pass.
+2. One feature per commit — keep it atomic.
+3. Always commit at the end, even if partial (`wip:` prefix for partial/failed).
+4. Verifiable signal must be green before advancing to the next stage.
+5. Squash merge only — never plain `git merge` on worktree branches (see `.claude/rules/git-linear-history.md`).
+6. If truly ambiguous, make a reasonable assumption and document it in a code comment.
