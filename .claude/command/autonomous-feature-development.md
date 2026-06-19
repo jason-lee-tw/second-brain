@@ -247,6 +247,13 @@ The skill boots the system and exercises the changed endpoints/paths. Match obse
    git worktree remove .worktrees/verification-fix-<round> --force
    git branch -D worktree/verification-fix-<round>
    ```
+   After squash-merging the fix, update `.loop-logs/tasks/verification-state.json`:
+   ```json
+   {
+     "rounds_completed": <current round number>,
+     "last_outcome": "pass" | "fail"
+   }
+   ```
 4. Re-run verification.
 5. Repeat up to **3 rounds total**.
 
@@ -266,7 +273,11 @@ The skill boots the system and exercises the changed endpoints/paths. Match obse
   ## Round 3
   <full verification output>
   ```
-- Commit: `wip: verification failed after 3 rounds — see .loop-logs/error/verification-failure.md`
+- Stage and commit:
+  ```bash
+  git add -A
+  git commit -m "wip: verification failed after 3 rounds — see .loop-logs/error/verification-failure.md"
+  ```
 - Stop.
 
 ---
@@ -321,7 +332,8 @@ Write `.loop-logs/logs/summary.md`:
 **Failed:** N/total (see .loop-logs/error/ for details)
 
 ## Verification
-Rounds: N
+Read `.loop-logs/tasks/verification-state.json` for the verification round count.
+**Verification rounds:** <rounds_completed from verification-state.json>
 
 ## Review
 Rounds: N
