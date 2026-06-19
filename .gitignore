@@ -10,4 +10,5 @@ __pycache__/
 # Environment variable files
 .env
 .env.*.local
-!.env.template.claude/worktrees/
+!.env.template
+.claude/worktrees/
