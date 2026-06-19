@@ -113,3 +113,43 @@ async def test_ingest_url_crawls_and_invokes_graph():
     mock_crawl.assert_called_once_with("https://example.com/page")
     data = response.json()
     assert data["numberOfFilePassed"] == 1
+
+
+@pytest.mark.asyncio
+async def test_ingest_url_handles_single_crawl_failure_gracefully(tmp_path):
+    """POST /ingest/url with mixed good/bad URLs: bad URL in failedFiles, no 500."""
+    good_path = Path("temp/pending-digest-docs/good-url.md")
+
+    async def side_effect(url):
+        if "bad" in url:
+            raise ValueError("Tavily returned no content for URL: https://bad.example.com")
+        return good_path
+
+    mock_final_state = {
+        "processed": ["good-url.md"],
+        "failed": [],
+        "files": [],
+        "in_progress": [],
+        "retry_queue": [],
+    }
+
+    with (
+        patch(
+            "second_brain.api.routers.ingest.crawl_and_save", side_effect=side_effect
+        ),
+        patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph,
+    ):
+        mock_graph.ainvoke = AsyncMock(return_value=mock_final_state)
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/ingest/url",
+                json={"urls": ["https://good.example.com/page", "https://bad.example.com/article"]},
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["numberOfFilePassed"] == 1
+    assert len(data["failedFiles"]) == 1
+    assert "bad" in data["failedFiles"][0]
