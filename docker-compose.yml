@@ -51,13 +51,6 @@ services:
     ports:
       - "6006:6006"
       - "4317:4317"
-    healthcheck:
-      test: ["CMD", "/usr/bin/python3.13", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:6006', timeout=3)"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
     networks:
       - phoenix_network
     depends_on:
