@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Any
 
 from pydantic import SecretStr, model_validator
@@ -12,6 +13,15 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr
     tavily_api_key: SecretStr
     phoenix_collection_endpoint: str = "http://localhost:4317"
+
+    # Directory paths for ingestion pipeline
+    pending_docs_dir: Path = Path("temp/pending-digest-docs")
+    processed_dir: Path = Path("temp/processed")
+    failed_dir: Path = Path("temp/failed")
+
+    # Model names
+    ingestion_model: str = "claude-haiku-4-5"
+    embedding_model: str = "qwen3-embedding:0.6b"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
