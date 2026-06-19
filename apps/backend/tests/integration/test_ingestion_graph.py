@@ -80,7 +80,7 @@ async def test_full_ingest_file_success(tmp_dirs):
 
         initial: IngestionState = {
             "files": ["test-note.md"],
-            "in_progress": [],
+            "in_progress": None,
             "processed": [],
             "retry_queue": [],
             "failed": [],
@@ -89,7 +89,7 @@ async def test_full_ingest_file_success(tmp_dirs):
 
     assert "test-note.md" in final["processed"], f"processed={final['processed']}"
     assert final["failed"] == []
-    assert final["in_progress"] == []
+    assert final["in_progress"] is None
 
     processed_file = tmp_dirs["processed"] / "test-note.md"
     pending_file = tmp_dirs["pending"] / "test-note.md"
@@ -138,7 +138,7 @@ async def test_duplicate_file_is_skipped_on_reingest(tmp_dirs):
         graph = build_ingestion_graph()
         initial: IngestionState = {
             "files": ["test-dupe.md"],
-            "in_progress": [],
+            "in_progress": None,
             "processed": [],
             "retry_queue": [],
             "failed": [],
