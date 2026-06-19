@@ -25,9 +25,8 @@ async def _run_ingestion(
         "processed": [],
         "retry_queue": [],
         "failed": [],
+        "source_urls": source_urls or {},
     }
-    if source_urls:
-        initial_state["source_urls"] = source_urls
     final_state = await ingestion_graph.ainvoke(initial_state)
     return IngestFileResponse(
         numberOfFilePassed=len(final_state["processed"]),
@@ -74,7 +73,6 @@ async def ingest_url(request: IngestUrlRequest) -> IngestFileResponse:
     ingestion_result = await _run_ingestion(
         [p.name for p in saved_paths], source_urls=source_urls
     )
-    return IngestFileResponse(
-        numberOfFilePassed=ingestion_result.numberOfFilePassed,
-        failedFiles=failed_crawl_names + ingestion_result.failedFiles,
+    return ingestion_result.model_copy(
+        update={"failedFiles": failed_crawl_names + ingestion_result.failedFiles}
     )

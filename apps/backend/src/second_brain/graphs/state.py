@@ -13,5 +13,6 @@ class IngestionState(TypedDict):
     processed: list[str]  # successfully ingested filenames
     retry_queue: list[FailedFile]  # retry_count < 3 (terminal threshold)
     failed: list[FailedFile]  # terminal failures: retry_count >= 3
-    # filename -> original URL; absent for local-file ingestion
+    # filename -> original URL; router always sets this key
+    # (empty dict for local-file ingestion)
     source_urls: NotRequired[dict[str, str]]

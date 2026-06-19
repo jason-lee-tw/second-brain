@@ -168,3 +168,92 @@ async def test_ingest_url_handles_single_crawl_failure_gracefully(tmp_path):
     assert data["numberOfFilePassed"] == 1
     assert len(data["failedFiles"]) == 1
     assert "bad" in data["failedFiles"][0]
+
+
+@pytest.mark.asyncio
+async def test_ingest_file_initial_state_always_includes_source_urls(tmp_path):
+    """POST /ingest/file must pass source_urls={} in initial_state for local files."""
+    pending = tmp_path / "pending-digest-docs"
+    pending.mkdir()
+    (pending / "doc1.md").write_text("content")
+
+    mock_final_state = {
+        "processed": ["doc1.md"],
+        "failed": [],
+        "files": [],
+        "in_progress": [],
+        "retry_queue": [],
+        "source_urls": {},
+    }
+
+    with (
+        patch("second_brain.api.routers.ingest.PENDING_DOCS_DIR", pending),
+        patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph,
+    ):
+        mock_graph.ainvoke = AsyncMock(return_value=mock_final_state)
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.post("/ingest/file")
+
+    call_args = mock_graph.ainvoke.call_args[0][0]
+    assert "source_urls" in call_args, (
+        "source_urls key must always be present in initial_state"
+    )
+    assert call_args["source_urls"] == {}, (
+        "source_urls must be empty dict for local-file ingestion"
+    )
+
+
+@pytest.mark.asyncio
+async def test_ingest_url_merges_crawl_and_graph_failures():
+    """POST /ingest/url failedFiles must include both crawl and graph failures."""
+    good_path = Path("temp/pending-digest-docs/good-page.md")
+
+    async def side_effect(url):
+        if "bad" in url:
+            raise ValueError("Tavily returned no content")
+        return good_path
+
+    mock_final_state = {
+        "processed": [],
+        "failed": [
+            {"filename": "good-page.md", "error": "embed error", "retry_count": 3}
+        ],
+        "files": [],
+        "in_progress": [],
+        "retry_queue": [],
+        "source_urls": {"good-page.md": "https://good.example.com/page"},
+    }
+
+    with (
+        patch(
+            "second_brain.api.routers.ingest.crawl_and_save", side_effect=side_effect
+        ),
+        patch("second_brain.api.routers.ingest.ingestion_graph") as mock_graph,
+    ):
+        mock_graph.ainvoke = AsyncMock(return_value=mock_final_state)
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/ingest/url",
+                json={
+                    "urls": [
+                        "https://good.example.com/page",
+                        "https://bad.example.com/article",
+                    ]
+                },
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    # crawl failure for bad URL
+    assert any("bad" in f for f in data["failedFiles"]), (
+        "crawl failure must appear in failedFiles"
+    )
+    # graph failure for good URL that was saved but failed ingestion
+    assert "good-page.md" in data["failedFiles"], (
+        "graph failure must appear in failedFiles"
+    )
+    assert data["numberOfFilePassed"] == 0
