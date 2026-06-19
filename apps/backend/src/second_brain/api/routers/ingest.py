@@ -51,7 +51,7 @@ async def ingest_file() -> IngestFileResponse:
 async def ingest_url(request: IngestUrlRequest) -> IngestFileResponse:
     """Crawl each URL via Tavily concurrently, then ingest successfully saved files."""
     results = await asyncio.gather(
-        *[crawl_and_save(url) for url in request.urls],
+        *[crawl_and_save(str(url)) for url in request.urls],
         return_exceptions=True,
     )
 
@@ -61,10 +61,10 @@ async def ingest_url(request: IngestUrlRequest) -> IngestFileResponse:
 
     for url, result in zip(request.urls, results):
         if isinstance(result, Exception):
-            failed_crawl_names.append(f"{url_to_slug(url)}.md")
+            failed_crawl_names.append(f"{url_to_slug(str(url))}.md")
         else:
             saved_paths.append(result)
-            source_urls[result.name] = url
+            source_urls[result.name] = str(url)
 
     if not saved_paths:
         return IngestFileResponse(numberOfFilePassed=0, failedFiles=failed_crawl_names)

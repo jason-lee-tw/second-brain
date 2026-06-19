@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import AnyHttpUrl, BaseModel
 
 
 class IngestFileResponse(BaseModel):
@@ -7,4 +7,4 @@ class IngestFileResponse(BaseModel):
 
 
 class IngestUrlRequest(BaseModel):
-    urls: list[str]
+    urls: list[AnyHttpUrl]

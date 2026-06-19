@@ -26,9 +26,15 @@ def test_ingest_file_response_defaults_empty_failed_files():
 def test_ingest_url_request_valid():
     req = IngestUrlRequest(urls=["https://example.com", "https://other.com"])
     assert len(req.urls) == 2
-    assert req.urls[0] == "https://example.com"
+    assert "example.com" in str(req.urls[0])
 
 
 def test_ingest_url_request_rejects_missing_urls():
     with pytest.raises(ValidationError):
         IngestUrlRequest()  # urls is required
+
+
+def test_ingest_url_request_rejects_non_url_string():
+    """A bare non-URL string must fail Pydantic validation with a 422-style error."""
+    with pytest.raises(ValidationError):
+        IngestUrlRequest(urls=["not-a-url"])
