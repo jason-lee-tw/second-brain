@@ -1,1 +1,10 @@
-# API request/response schemas — populated in later tickets.
+from pydantic import BaseModel
+
+
+class IngestFileResponse(BaseModel):
+    numberOfFilePassed: int
+    failedFiles: list[str]
+
+
+class IngestUrlRequest(BaseModel):
+    urls: list[str]
