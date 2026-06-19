@@ -1,6 +1,5 @@
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 import tiktoken
 
@@ -33,29 +32,30 @@ def detect_content_type(text: str) -> str:
     return "transcription"
 
 
-def _extract_code_fences(text: str) -> Tuple[str, Dict[str, str]]:
+def _extract_code_fences(text: str) -> tuple[str, dict[str, str]]:
     """Replace ``` code fences with unique placeholders to protect them from
     splitting."""
-    placeholders: Dict[str, str] = {}
-    counter = [0]
+    placeholders: dict[str, str] = {}
+    counter = 0
 
     def replacer(match: re.Match) -> str:
-        key = f"__FENCE_{counter[0]}__"
+        nonlocal counter
+        key = f"__FENCE_{counter}__"
         placeholders[key] = match.group(0)
-        counter[0] += 1
+        counter += 1
         return key
 
     modified = re.sub(r"```[\s\S]*?```", replacer, text)
     return modified, placeholders
 
 
-def _restore_fences(text: str, placeholders: Dict[str, str]) -> str:
+def _restore_fences(text: str, placeholders: dict[str, str]) -> str:
     for key, value in placeholders.items():
         text = text.replace(key, value)
     return text
 
 
-def _split_by_headings(text: str) -> List[Tuple[str, str]]:
+def _split_by_headings(text: str) -> list[tuple[str, str]]:
     """Split on H1/H2/H3 boundaries. Returns [(heading_path, body_text)]."""
     heading_re = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
     matches = list(heading_re.finditer(text))
@@ -64,8 +64,8 @@ def _split_by_headings(text: str) -> List[Tuple[str, str]]:
         stripped = text.strip()
         return [("", stripped)] if stripped else []
 
-    sections: List[Tuple[str, str]] = []
-    heading_stack: List[str] = ["", "", ""]  # index 0=H1, 1=H2, 2=H3
+    sections: list[tuple[str, str]] = []
+    heading_stack: list[str] = ["", "", ""]  # index 0=H1, 1=H2, 2=H3
 
     pre = text[: matches[0].start()].strip()
     if pre:
@@ -91,23 +91,22 @@ def _split_by_headings(text: str) -> List[Tuple[str, str]]:
     return sections
 
 
-def _split_by_paragraphs(text: str) -> List[str]:
+def _split_by_paragraphs(text: str) -> list[str]:
     return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
 
 
-def _split_by_sentences(text: str) -> List[str]:
+def _split_by_sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
 
 
 def _merge_into_chunks(
-    paragraphs: List[str],
-    target: int,
+    paragraphs: list[str],
     max_tokens: int,
     overlap: int,
-    placeholders: Dict[str, str],
-) -> List[str]:
-    result: List[str] = []
-    bucket: List[str] = []
+    placeholders: dict[str, str],
+) -> list[str]:
+    result: list[str] = []
+    bucket: list[str] = []
     bucket_tokens = 0
 
     def flush() -> None:
@@ -123,7 +122,7 @@ def _merge_into_chunks(
             return
         result.append("\n\n".join(bucket))
         if overlap > 0:
-            tail: List[str] = []
+            tail: list[str] = []
             tail_tokens = 0
             for item in reversed(bucket):
                 t = count_tokens(item)
@@ -169,7 +168,7 @@ def _merge_into_chunks(
     return result
 
 
-def chunk_document(content: str, source: str) -> List[Chunk]:
+def chunk_document(content: str, source: str) -> list[Chunk]:
     """Hybrid chunking: headings → paragraphs → sentences; code fences are atomic."""
     if not content.strip():
         return []
@@ -188,7 +187,7 @@ def chunk_document(content: str, source: str) -> List[Chunk]:
     modified, placeholders = _extract_code_fences(content)
     sections = _split_by_headings(modified)
 
-    chunks: List[Chunk] = []
+    chunks: list[Chunk] = []
     chunk_index = 0
 
     for heading_path, section_text in sections:
@@ -211,7 +210,7 @@ def chunk_document(content: str, source: str) -> List[Chunk]:
         else:
             paragraphs = _split_by_paragraphs(section_text)
             merged = _merge_into_chunks(
-                paragraphs, target, max_tokens, overlap, placeholders
+                paragraphs, max_tokens, overlap, placeholders
             )
             for chunk_text in merged:
                 chunks.append(
