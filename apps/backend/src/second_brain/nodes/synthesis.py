@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 from second_brain.graphs.state import SecondBrainState
 
 _UNCERTAINTY_THRESHOLD = 0.7
+# "neither" route = no external retrieval attempted; assume baseline confidence
+# since LLM answered from context alone
 _NEITHER_CONFIDENCE_FLOOR = 0.5
 
 
@@ -87,6 +89,8 @@ async def synthesize_answer(state: SecondBrainState) -> dict:
     output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)
 
     confidence = output.confidence
+    # Floor confidence for conversational queries: skipping external retrieval
+    # means no uncertain sources were consulted
     if routing == "neither":
         confidence = max(confidence, _NEITHER_CONFIDENCE_FLOOR)
 
