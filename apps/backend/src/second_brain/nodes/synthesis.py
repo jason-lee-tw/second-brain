@@ -1,4 +1,5 @@
 """Synthesis node: generates a final answer with confidence scoring."""
+
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
@@ -61,11 +62,7 @@ async def synthesize_answer(state: SecondBrainState) -> dict:
         memory_context = "### Memory\n" + "\n".join(facts)
 
     # Use only the last 10 messages (excluding the current query) for history
-    all_messages = state["messages"]
-    # The last message is the current query; history is everything before it
-    history_messages = all_messages[:-1]
-    recent_history = history_messages[-10:]  # trim to last 10
-    conversation_history = _format_messages(recent_history)
+    conversation_history = _format_messages(state["messages"][-11:-1])
 
     context_parts = [p for p in [rag_context, web_context, memory_context] if p]
     no_context = "No additional context available."

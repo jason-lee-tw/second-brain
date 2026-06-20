@@ -1,4 +1,5 @@
 """MemoryRetrievalNode stub — full implementation in Ticket 5."""
+
 from second_brain.graphs.state import SecondBrainState
 
 

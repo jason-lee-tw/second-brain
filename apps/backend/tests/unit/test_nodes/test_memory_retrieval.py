@@ -1,4 +1,5 @@
 """Unit tests for the MemoryRetrievalNode stub."""
+
 import pytest
 
 from second_brain.nodes.memory_retrieval import retrieve_memory

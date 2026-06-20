@@ -1,10 +1,11 @@
 # apps/backend/src/second_brain/api/routers/query.py
 """POST /query router — invokes the SecondBrain query graph."""
 
-import uuid
+import asyncio
 
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
+from uuid6 import uuid7
 
 from second_brain.api.schemas import QueryRequest, QueryResponse
 from second_brain.config import settings
@@ -13,20 +14,31 @@ from second_brain.graphs.query_graph import build_query_graph
 router = APIRouter(prefix="/query", tags=["query"])
 
 _graph = None
+_pool = None
+_init_lock = asyncio.Lock()
 
 
 async def _get_graph():
-    global _graph
-    if _graph is None:
-        pg_url = settings.database_url.replace("postgresql+psycopg2://", "postgresql://")
-        _graph = await build_query_graph(pg_url)
+    global _graph, _pool
+    async with _init_lock:
+        if _graph is None:
+            pg_url = settings.postgres_url
+            _graph, _pool = await build_query_graph(pg_url)
     return _graph
+
+
+async def shutdown_query_graph() -> None:
+    global _graph, _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
+        _graph = None
 
 
 @router.post("", response_model=QueryResponse)
 async def query_endpoint(request: QueryRequest) -> QueryResponse:
     """Invoke the SecondBrain query graph and return a structured response."""
-    session_id = request.sessionId or str(uuid.uuid4())
+    session_id = request.sessionId or str(uuid7())
     graph = await _get_graph()
     input_state = {
         "session_id": session_id,

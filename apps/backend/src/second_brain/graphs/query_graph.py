@@ -1,8 +1,10 @@
 # apps/backend/src/second_brain/graphs/query_graph.py
 """SecondBrain query LangGraph with PostgresSaver checkpointing."""
 
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import Send
+from psycopg_pool import AsyncConnectionPool
 
 from second_brain.graphs.state import SecondBrainState
 from second_brain.nodes.memory_retrieval import retrieve_memory
@@ -11,26 +13,6 @@ from second_brain.nodes.pii_redaction import redact_inbound, redact_outbound
 from second_brain.nodes.rag_retrieval import retrieve_from_rag
 from second_brain.nodes.synthesis import synthesize_answer
 from second_brain.nodes.web_research import search_web
-
-# ---------------------------------------------------------------------------
-# Optional postgres checkpointer imports — mocked in unit tests when absent
-# ---------------------------------------------------------------------------
-try:
-    from langgraph.checkpoint.postgres.aio import (
-        AsyncPostgresSaver,  # type: ignore[import-not-found]
-    )
-except ImportError:
-    try:
-        from langgraph_checkpoint_postgres import (
-            AsyncPostgresSaver,  # type: ignore[import-not-found,no-redef]
-        )
-    except ImportError:
-        AsyncPostgresSaver = None  # type: ignore[assignment,misc]
-
-try:
-    from psycopg_pool import AsyncConnectionPool  # type: ignore[import-not-found]
-except ImportError:
-    AsyncConnectionPool = None  # type: ignore[assignment,misc]
 
 
 def _route_retrieval(state: SecondBrainState):
@@ -46,14 +28,15 @@ def _route_retrieval(state: SecondBrainState):
         return "synthesis"
 
 
-async def build_query_graph(postgres_url: str):
+async def build_query_graph(postgres_url: str) -> tuple:
     """Build and compile the SecondBrain query graph with Postgres checkpointing.
 
     Args:
         postgres_url: A plain ``postgresql://`` connection string (no driver suffix).
 
     Returns:
-        A compiled LangGraph ``CompiledStateGraph`` ready for ``ainvoke``.
+        A ``(compiled_graph, pool)`` tuple — the caller is responsible for closing
+        the pool on shutdown via ``await pool.close()``.
     """
     pool = AsyncConnectionPool(conninfo=postgres_url, open=False)
     await pool.open()
@@ -86,4 +69,5 @@ async def build_query_graph(postgres_url: str):
     workflow.add_edge("synthesis", "redact_outbound")
     workflow.add_edge("redact_outbound", END)
 
-    return workflow.compile(checkpointer=checkpointer)
+    compiled = workflow.compile(checkpointer=checkpointer)
+    return compiled, pool

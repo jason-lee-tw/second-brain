@@ -1,4 +1,5 @@
 """Unit tests for web_research node."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,9 +36,7 @@ async def test_search_web_returns_web_results():
     mock_client = MagicMock()
     mock_client.search.return_value = mock_response
 
-    state = make_state(
-        messages=[HumanMessage(content="What is quantum computing?")]
-    )
+    state = make_state(messages=[HumanMessage(content="What is quantum computing?")])
 
     with (
         patch(TAVILY_PATCH, return_value=mock_client),
@@ -79,9 +78,7 @@ async def test_search_web_returns_empty_results_when_no_results():
     mock_client = MagicMock()
     mock_client.search.return_value = {"results": []}
 
-    state = make_state(
-        messages=[HumanMessage(content="obscure query with no results")]
-    )
+    state = make_state(messages=[HumanMessage(content="obscure query with no results")])
 
     with (
         patch(TAVILY_PATCH, return_value=mock_client),

@@ -12,6 +12,8 @@ def redact_inbound(state: SecondBrainState) -> dict:
     Returns only the redacted message; the ``add_messages`` reducer replaces
     the existing message by id, preserving all prior messages.
     """
+    if not state["messages"]:
+        raise ValueError("redact_inbound requires at least one message in state")
     last = state["messages"][-1]
     redacted = HumanMessage(content=redact_pii(last.content), id=last.id)
     return {"messages": [redacted]}

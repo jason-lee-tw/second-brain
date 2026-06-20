@@ -1,4 +1,5 @@
 """Unit tests for the RAG retrieval node."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -28,13 +29,16 @@ async def test_retrieve_from_rag_happy_path():
     """Happy path: returns rag_results populated from pgvector rows."""
     state = make_state(messages=[HumanMessage(content="What is Python?")])
 
-    with patch(
-        "second_brain.nodes.rag_retrieval._embed_query",
-        new=AsyncMock(return_value=MOCK_EMBEDDING),
-    ) as mock_embed, patch(
-        "second_brain.nodes.rag_retrieval._query_pgvector",
-        new=AsyncMock(return_value=MOCK_ROWS),
-    ) as mock_query:
+    with (
+        patch(
+            "second_brain.nodes.rag_retrieval._embed_query",
+            new=AsyncMock(return_value=MOCK_EMBEDDING),
+        ) as mock_embed,
+        patch(
+            "second_brain.nodes.rag_retrieval._query_pgvector",
+            new=AsyncMock(return_value=MOCK_ROWS),
+        ) as mock_query,
+    ):
         from second_brain.nodes.rag_retrieval import retrieve_from_rag
 
         result = await retrieve_from_rag(state)
@@ -54,12 +58,15 @@ async def test_retrieve_from_rag_empty_results():
     """Edge case: pgvector returns no rows — rag_results is an empty list."""
     state = make_state(messages=[HumanMessage(content="Unknown topic")])
 
-    with patch(
-        "second_brain.nodes.rag_retrieval._embed_query",
-        new=AsyncMock(return_value=MOCK_EMBEDDING),
-    ), patch(
-        "second_brain.nodes.rag_retrieval._query_pgvector",
-        new=AsyncMock(return_value=[]),
+    with (
+        patch(
+            "second_brain.nodes.rag_retrieval._embed_query",
+            new=AsyncMock(return_value=MOCK_EMBEDDING),
+        ),
+        patch(
+            "second_brain.nodes.rag_retrieval._query_pgvector",
+            new=AsyncMock(return_value=[]),
+        ),
     ):
         from second_brain.nodes.rag_retrieval import retrieve_from_rag
 
@@ -83,12 +90,15 @@ async def test_retrieve_from_rag_uses_last_message():
         captured_query.append(query)
         return MOCK_EMBEDDING
 
-    with patch(
-        "second_brain.nodes.rag_retrieval._embed_query",
-        new=fake_embed,
-    ), patch(
-        "second_brain.nodes.rag_retrieval._query_pgvector",
-        new=AsyncMock(return_value=MOCK_ROWS),
+    with (
+        patch(
+            "second_brain.nodes.rag_retrieval._embed_query",
+            new=fake_embed,
+        ),
+        patch(
+            "second_brain.nodes.rag_retrieval._query_pgvector",
+            new=AsyncMock(return_value=MOCK_ROWS),
+        ),
     ):
         from second_brain.nodes.rag_retrieval import retrieve_from_rag
 

@@ -1,4 +1,5 @@
 """RAG retrieval node: embeds the user query and fetches top-k chunks via pgvector."""
+
 import asyncpg
 import httpx
 from pgvector.asyncpg import register_vector
@@ -50,19 +51,6 @@ async def _query_pgvector(
 async def retrieve_from_rag(state: SecondBrainState) -> dict:
     """LangGraph node: retrieves relevant chunks for the latest user message."""
     query = state["messages"][-1].content
-    pg_url = settings.database_url.replace(
-        "postgresql+psycopg2://", "postgresql://"
-    )
     embedding = await _embed_query(query, settings.ollama_base_url)
-    rows = await _query_pgvector(embedding, pg_url)
-    return {
-        "rag_results": [
-            {
-                "content": r["content"],
-                "score": r["score"],
-                "chunk_index": r["chunk_index"],
-                "metadata": r["metadata"],
-            }
-            for r in rows
-        ]
-    }
+    rows = await _query_pgvector(embedding, settings.postgres_url)
+    return {"rag_results": rows}

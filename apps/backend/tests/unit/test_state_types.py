@@ -1,4 +1,5 @@
 """Tests for SecondBrainState TypedDicts and RagResult structure."""
+
 from langchain_core.messages import HumanMessage
 
 from second_brain.graphs.state import (

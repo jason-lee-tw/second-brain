@@ -23,6 +23,11 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    @property
+    def postgres_url(self) -> str:
+        """Plain postgresql:// URL for asyncpg/psycopg3 (strips +psycopg2 suffix)."""
+        return self.database_url.replace("postgresql+psycopg2://", "postgresql://")
+
     @model_validator(mode="before")
     @classmethod
     def _reject_deprecated_phoenix_key(cls, values: Any) -> Any:

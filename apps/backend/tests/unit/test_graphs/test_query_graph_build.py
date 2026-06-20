@@ -145,7 +145,9 @@ async def test_build_query_graph_returns_compiled_graph():
         MockSaver.return_value = mock_saver
         from second_brain.graphs.query_graph import build_query_graph
 
-        graph = await build_query_graph("postgresql://fake:fake@localhost:5432/test")
+        graph, pool = await build_query_graph(
+            "postgresql://fake:fake@localhost:5432/test"
+        )
 
     assert hasattr(graph, "ainvoke")
 

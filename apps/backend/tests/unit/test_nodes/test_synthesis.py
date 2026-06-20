@@ -1,4 +1,5 @@
 """Unit tests for the synthesis node."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

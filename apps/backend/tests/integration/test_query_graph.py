@@ -111,7 +111,9 @@ async def test_ac5_pii_redacted_before_llm_sees_message():
             return_value=_mock_synthesis("Here is your answer.")
         )
 
-        graph = await build_query_graph("postgresql://fake:test@localhost:5432/test")
+        graph, _pool = await build_query_graph(
+            "postgresql://fake:test@localhost:5432/test"
+        )
 
         pii_message = "My email is alice.wonderland@example.com and I need help."
         result = await graph.ainvoke(
@@ -175,11 +177,11 @@ async def test_ac6_pii_redacted_in_final_answer():
         patch("second_brain.nodes.synthesis._structured_llm") as mock_synth_llm,
     ):
         mock_orch_llm.ainvoke = AsyncMock(return_value=_mock_routing("neither"))
-        mock_synth_llm.ainvoke = AsyncMock(
-            return_value=_mock_synthesis(pii_answer)
-        )
+        mock_synth_llm.ainvoke = AsyncMock(return_value=_mock_synthesis(pii_answer))
 
-        graph = await build_query_graph("postgresql://fake:test@localhost:5432/test")
+        graph, _pool = await build_query_graph(
+            "postgresql://fake:test@localhost:5432/test"
+        )
 
         result = await graph.ainvoke(
             _base_input_state("Who should I contact?", session_id="ac6-session"),
@@ -254,7 +256,9 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
             return_value=_mock_synthesis("Second Brain is here to help.")
         )
 
-        real_graph = await build_query_graph("postgresql://fake:test@localhost:5432/test")
+        real_graph, _pool = await build_query_graph(
+            "postgresql://fake:test@localhost:5432/test"
+        )
 
     # Wrap ainvoke so we can record the thread_id without re-entering mock blocks
     original_ainvoke = real_graph.ainvoke
@@ -269,12 +273,14 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
 
     # Patch the router so it uses our pre-built graph (skipping real Postgres init)
     original_graph_attr = query_module._graph
+    original_pool_attr = query_module._pool
 
     async def fake_build_query_graph(_url: str):
-        return real_graph
+        return real_graph, None
 
     try:
         query_module._graph = None  # force _get_graph to call build_query_graph
+        query_module._pool = None
 
         with (
             patch(
@@ -323,6 +329,7 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
     finally:
         # Restore router state to avoid cross-test pollution
         query_module._graph = original_graph_attr
+        query_module._pool = original_pool_attr
 
     # Both calls must have used the same thread_id (session continuity)
     assert len(thread_ids_seen) >= 2, (

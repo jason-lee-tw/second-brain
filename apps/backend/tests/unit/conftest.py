@@ -1,4 +1,5 @@
 """Shared test fixtures and factories for unit tests."""
+
 from langchain_core.messages import HumanMessage
 
 from second_brain.graphs.state import SecondBrainState

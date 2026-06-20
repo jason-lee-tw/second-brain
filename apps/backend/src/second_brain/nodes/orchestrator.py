@@ -28,7 +28,6 @@ Choose the routing_decision that best serves the user."""
 
 class _RoutingOutput(BaseModel):
     routing_decision: Literal["rag", "web", "both", "neither"]
-    reasoning: str
 
 
 _structured_llm = ChatAnthropic(model="claude-haiku-4-5").with_structured_output(
