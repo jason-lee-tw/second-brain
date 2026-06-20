@@ -1,7 +1,7 @@
 """Unit tests for the RAG retrieval node."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
 from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
@@ -140,7 +140,7 @@ async def test_get_rag_pool_creates_pool_once():
 
 @pytest.mark.asyncio
 async def test_shutdown_rag_pool_closes_and_resets():
-    """shutdown_rag_pool closes the pool and resets the module-level singleton to None."""
+    """shutdown_rag_pool closes the pool and resets the singleton to None."""
     from second_brain.nodes.rag_retrieval import shutdown_rag_pool
 
     mock_pool = AsyncMock()
