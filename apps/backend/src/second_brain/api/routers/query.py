@@ -50,11 +50,6 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         "final_answer": "",
         "confidence": 0.0,
         "is_uncertain": False,
-        "awaiting_correction": False,
-        "awaiting_conflict_clarification": False,
-        "conflict_context": [],
-        "fact_updates": [],
-        "correction_updates": [],
     }
     try:
         result = await graph.ainvoke(

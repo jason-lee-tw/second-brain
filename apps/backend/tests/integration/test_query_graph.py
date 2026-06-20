@@ -50,11 +50,6 @@ def _base_input_state(message: str, session_id: str = "test-session") -> dict:
         "final_answer": "",
         "confidence": 0.0,
         "is_uncertain": False,
-        "awaiting_correction": False,
-        "awaiting_conflict_clarification": False,
-        "conflict_context": [],
-        "fact_updates": [],
-        "correction_updates": [],
     }
 
 

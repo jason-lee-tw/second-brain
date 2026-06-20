@@ -68,8 +68,8 @@ class SecondBrainState(TypedDict):
     final_answer: str
     confidence: float
     is_uncertain: bool
-    awaiting_correction: bool
-    awaiting_conflict_clarification: bool
-    conflict_context: list[str]
-    fact_updates: list[FactUpdate]
-    correction_updates: list[CorrectionUpdate]
+    awaiting_correction: NotRequired[bool]  # Ticket 5: memory-correction
+    awaiting_conflict_clarification: NotRequired[bool]  # Ticket 5: memory-correction
+    conflict_context: NotRequired[list[str]]  # Ticket 5: memory-correction
+    fact_updates: NotRequired[list[FactUpdate]]  # Ticket 5: memory-correction
+    correction_updates: NotRequired[list[CorrectionUpdate]]  # T5: memory-correction

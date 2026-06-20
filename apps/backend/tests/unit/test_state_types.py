@@ -1,5 +1,7 @@
 """Tests for SecondBrainState TypedDicts and RagResult structure."""
 
+import typing
+
 from langchain_core.messages import HumanMessage
 
 from second_brain.graphs.state import (
@@ -81,8 +83,30 @@ def test_correction_update_construction():
     assert update["root_cause"] == "Hallucination"
 
 
+def test_deferred_fields_are_not_required():
+    """The 5 memory-correction fields must be annotated as NotRequired[...].
+
+    This is the TDD red test: it verifies the type annotation metadata, not
+    runtime TypedDict enforcement.  It fails before the NotRequired wrapping
+    is applied in state.py and passes after.
+    """
+    hints = typing.get_type_hints(SecondBrainState, include_extras=True)
+    deferred_fields = [
+        "awaiting_correction",
+        "awaiting_conflict_clarification",
+        "conflict_context",
+        "fact_updates",
+        "correction_updates",
+    ]
+    for field in deferred_fields:
+        hint = hints[field]
+        assert typing.get_origin(hint) is typing.NotRequired, (
+            f"Field {field!r} must be annotated as NotRequired[...]; got {hint!r}"
+        )
+
+
 def test_second_brain_state_minimal_construction():
-    """SecondBrainState can be constructed with all required keys."""
+    """SecondBrainState can be constructed without the optional deferred fields."""
     state: SecondBrainState = {
         "session_id": "test-session-001",
         "messages": [HumanMessage(content="Hello")],
@@ -93,11 +117,6 @@ def test_second_brain_state_minimal_construction():
         "final_answer": "",
         "confidence": 0.9,
         "is_uncertain": False,
-        "awaiting_correction": False,
-        "awaiting_conflict_clarification": False,
-        "conflict_context": [],
-        "fact_updates": [],
-        "correction_updates": [],
     }
     assert state["session_id"] == "test-session-001"
     assert len(state["messages"]) == 1
@@ -119,11 +138,6 @@ def test_second_brain_state_routing_decision_values():
             "final_answer": "answer",
             "confidence": 0.7,
             "is_uncertain": True,
-            "awaiting_correction": False,
-            "awaiting_conflict_clarification": False,
-            "conflict_context": [],
-            "fact_updates": [],
-            "correction_updates": [],
         }
         assert state["routing_decision"] == routing
 
@@ -151,11 +165,6 @@ def test_second_brain_state_with_rag_results():
         "final_answer": "combined answer",
         "confidence": 0.85,
         "is_uncertain": False,
-        "awaiting_correction": False,
-        "awaiting_conflict_clarification": False,
-        "conflict_context": [],
-        "fact_updates": [],
-        "correction_updates": [],
     }
     assert len(state["rag_results"]) == 1
     assert state["rag_results"][0]["score"] == 0.92
