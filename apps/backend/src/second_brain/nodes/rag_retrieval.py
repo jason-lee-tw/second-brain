@@ -1,11 +1,33 @@
 """RAG retrieval node: embeds the user query and fetches top-k chunks via pgvector."""
 
+import asyncio
+
 import asyncpg
 import httpx
 from pgvector.asyncpg import register_vector
 
 from second_brain.config import settings
 from second_brain.graphs.state import SecondBrainState
+
+_rag_pool: asyncpg.Pool | None = None
+_rag_pool_lock: asyncio.Lock = asyncio.Lock()
+
+
+async def _get_rag_pool(postgres_url: str) -> asyncpg.Pool:
+    """Return the module-level connection pool, initialising it on first call."""
+    global _rag_pool
+    async with _rag_pool_lock:
+        if _rag_pool is None:
+            _rag_pool = await asyncpg.create_pool(postgres_url, init=register_vector)
+    return _rag_pool
+
+
+async def shutdown_rag_pool() -> None:
+    """Close the module-level pool and reset the singleton to None."""
+    global _rag_pool
+    if _rag_pool is not None:
+        await _rag_pool.close()
+        _rag_pool = None
 
 
 async def _embed_query(query: str, base_url: str) -> list[float]:
@@ -24,9 +46,8 @@ async def _query_pgvector(
     embedding: list[float], postgres_url: str, top_k: int = 5
 ) -> list[dict]:
     """Query the document_chunks table for the top-k most similar chunks."""
-    conn = await asyncpg.connect(postgres_url)
-    try:
-        await register_vector(conn)
+    pool = await _get_rag_pool(postgres_url)
+    async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT content, 1-(embedding<=>$1) AS score, chunk_index, metadata"
             " FROM document_chunks"
@@ -44,8 +65,6 @@ async def _query_pgvector(
             }
             for r in rows
         ]
-    finally:
-        await conn.close()
 
 
 async def retrieve_from_rag(state: SecondBrainState) -> dict:

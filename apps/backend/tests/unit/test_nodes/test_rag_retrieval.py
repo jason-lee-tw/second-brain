@@ -1,10 +1,12 @@
 """Unit tests for the RAG retrieval node."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+from contextlib import asynccontextmanager
 
 import pytest
 from langchain_core.messages import HumanMessage
 
+from second_brain.nodes import rag_retrieval
 from tests.unit.conftest import make_state
 
 MOCK_EMBEDDING = [0.1, 0.2, 0.3]
@@ -105,3 +107,93 @@ async def test_retrieve_from_rag_uses_last_message():
         await retrieve_from_rag(state)
 
     assert captured_query == ["What is LangGraph?"]
+
+
+# ---------------------------------------------------------------------------
+# Pool singleton tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_rag_pool_creates_pool_once():
+    """Pool singleton: asyncpg.create_pool is called exactly once on repeated calls."""
+    from second_brain.nodes.rag_retrieval import _get_rag_pool
+
+    # Reset singleton so the test is isolated
+    rag_retrieval._rag_pool = None
+
+    mock_pool = AsyncMock()
+
+    with patch(
+        "second_brain.nodes.rag_retrieval.asyncpg.create_pool",
+        new=AsyncMock(return_value=mock_pool),
+    ) as mock_create:
+        pool1 = await _get_rag_pool("postgresql://test/db")
+        pool2 = await _get_rag_pool("postgresql://test/db")
+
+    mock_create.assert_awaited_once()
+    assert pool1 is pool2
+
+    # Clean up module-level state
+    rag_retrieval._rag_pool = None
+
+
+@pytest.mark.asyncio
+async def test_shutdown_rag_pool_closes_and_resets():
+    """shutdown_rag_pool closes the pool and resets the module-level singleton to None."""
+    from second_brain.nodes.rag_retrieval import shutdown_rag_pool
+
+    mock_pool = AsyncMock()
+    rag_retrieval._rag_pool = mock_pool
+
+    await shutdown_rag_pool()
+
+    mock_pool.close.assert_awaited_once()
+    assert rag_retrieval._rag_pool is None
+
+
+@pytest.mark.asyncio
+async def test_query_pgvector_uses_pool_acquire():
+    """_query_pgvector uses pool.acquire() and never calls asyncpg.connect directly."""
+    from second_brain.nodes.rag_retrieval import _query_pgvector
+
+    mock_rows = [
+        MagicMock(
+            **{
+                "__getitem__.side_effect": lambda key: {
+                    "content": "Test content",
+                    "score": 0.9,
+                    "chunk_index": 0,
+                    "metadata": {"source": "test.md"},
+                }[key]
+            }
+        )
+    ]
+
+    mock_conn = AsyncMock()
+    mock_conn.fetch = AsyncMock(return_value=mock_rows)
+
+    mock_pool = MagicMock()
+
+    @asynccontextmanager
+    async def fake_acquire():
+        yield mock_conn
+
+    mock_pool.acquire = fake_acquire
+
+    with (
+        patch(
+            "second_brain.nodes.rag_retrieval._get_rag_pool",
+            new=AsyncMock(return_value=mock_pool),
+        ) as mock_get_pool,
+        patch(
+            "second_brain.nodes.rag_retrieval.asyncpg.connect",
+        ) as mock_connect,
+    ):
+        result = await _query_pgvector([0.1, 0.2, 0.3], "postgresql://test/db")
+
+    mock_get_pool.assert_awaited_once()
+    mock_connect.assert_not_called()
+    assert len(result) == 1
+    assert result[0]["content"] == "Test content"
+    assert result[0]["score"] == 0.9
