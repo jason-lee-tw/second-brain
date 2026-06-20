@@ -1,6 +1,7 @@
 line-length = 88
 target-version = "py312"
 src = ["apps/backend/src"]
+exclude = [".claude", ".worktrees"]
 
 [lint]
 select = ["E", "F", "I"]
