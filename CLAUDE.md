@@ -58,7 +58,7 @@ but NOT sufficient. A task is complete only when ALL hold:
 2. `just test-unit` passes (TDD — write a failing test first; new code ships with tests
    for the happy path and 2+ edge cases).
 3. Behavior is observed on the running system, not just inferred. For any change with
-   runtime behavior (backend, HTTP, DB, agent, tracing): boot it (`just up-build` or
+   runtime behavior (backend, HTTP, DB, agent, tracing): boot it (`just up-all` or
    `uvicorn`), exercise the actual path, and confirm the observed output (HTTP status,
    response body, log line, trace) matches the acceptance criteria.
 4. Implementation is reviewed and clear all issues raised by using skill `enhanced-review`.
