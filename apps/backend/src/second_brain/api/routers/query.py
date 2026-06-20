@@ -1,0 +1,64 @@
+# apps/backend/src/second_brain/api/routers/query.py
+"""POST /query router — invokes the SecondBrain query graph."""
+
+import uuid
+
+from fastapi import APIRouter, HTTPException
+from langchain_core.messages import HumanMessage
+
+from second_brain.api.schemas import QueryRequest, QueryResponse
+from second_brain.config import settings
+from second_brain.graphs.query_graph import build_query_graph
+
+router = APIRouter(prefix="/query", tags=["query"])
+
+_graph = None
+
+
+async def _get_graph():
+    global _graph
+    if _graph is None:
+        pg_url = settings.database_url.replace("postgresql+psycopg2://", "postgresql://")
+        _graph = await build_query_graph(pg_url)
+    return _graph
+
+
+@router.post("", response_model=QueryResponse)
+async def query_endpoint(request: QueryRequest) -> QueryResponse:
+    """Invoke the SecondBrain query graph and return a structured response."""
+    session_id = request.sessionId or str(uuid.uuid4())
+    graph = await _get_graph()
+    input_state = {
+        "session_id": session_id,
+        "messages": [HumanMessage(content=request.message)],
+        "rag_results": [],
+        "web_results": [],
+        "retrieved_memory": [],
+        "routing_decision": "neither",
+        "final_answer": "",
+        "confidence": 0.0,
+        "is_uncertain": False,
+        "awaiting_correction": False,
+        "awaiting_conflict_clarification": False,
+        "conflict_context": [],
+        "fact_updates": [],
+        "correction_updates": [],
+    }
+    try:
+        result = await graph.ainvoke(
+            input_state, config={"configurable": {"thread_id": session_id}}
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Query graph error: {exc}"
+        ) from exc
+
+    conflict_context = result.get("conflict_context", [])
+    return QueryResponse(
+        answer=result["final_answer"],
+        sessionId=session_id,
+        confidence=result["confidence"],
+        isUncertain=result["is_uncertain"],
+        conflictDetected=bool(conflict_context),
+        conflictContext=conflict_context,
+    )
