@@ -9,12 +9,8 @@ from second_brain.graphs.state import SecondBrainState
 
 
 async def search_web(state: SecondBrainState) -> dict:
-    """Search the web using Tavily and return up to 3 results.
-
-    Adds 1-second delay before each Tavily call (not a true global rate limiter).
-    """
+    """Search the web using Tavily and return up to 3 results."""
     query = state["messages"][-1].content
-    await asyncio.sleep(1)  # adds 1-second delay before each call
     client = TavilyClient(api_key=settings.tavily_api_key.get_secret_value())
     response = await asyncio.to_thread(lambda: client.search(query, max_results=3))
     web_results = [

@@ -1,6 +1,6 @@
 """Unit tests for web_research node."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
@@ -8,7 +8,6 @@ from langchain_core.messages import HumanMessage
 from tests.unit.conftest import make_state
 
 TAVILY_PATCH = "second_brain.nodes.web_research.TavilyClient"
-SLEEP_PATCH = "second_brain.nodes.web_research.asyncio.sleep"
 
 
 @pytest.mark.asyncio
@@ -38,10 +37,7 @@ async def test_search_web_returns_web_results():
 
     state = make_state(messages=[HumanMessage(content="What is quantum computing?")])
 
-    with (
-        patch(TAVILY_PATCH, return_value=mock_client),
-        patch(SLEEP_PATCH, new_callable=AsyncMock),
-    ):
+    with patch(TAVILY_PATCH, return_value=mock_client):
         from second_brain.nodes.web_research import search_web
 
         result = await search_web(state)
@@ -54,25 +50,6 @@ async def test_search_web_returns_web_results():
 
 
 @pytest.mark.asyncio
-async def test_search_web_calls_sleep_for_rate_limiting():
-    """Rate limiting: asyncio.sleep(1) must be called exactly once per request."""
-    mock_client = MagicMock()
-    mock_client.search.return_value = {"results": []}
-
-    state = make_state(messages=[HumanMessage(content="test query")])
-
-    with (
-        patch(TAVILY_PATCH, return_value=mock_client),
-        patch(SLEEP_PATCH, new_callable=AsyncMock) as mock_sleep,
-    ):
-        from second_brain.nodes.web_research import search_web
-
-        await search_web(state)
-
-    mock_sleep.assert_called_once_with(1)
-
-
-@pytest.mark.asyncio
 async def test_search_web_returns_empty_results_when_no_results():
     """Edge case: Tavily returns empty results — node returns empty web_results."""
     mock_client = MagicMock()
@@ -80,10 +57,7 @@ async def test_search_web_returns_empty_results_when_no_results():
 
     state = make_state(messages=[HumanMessage(content="obscure query with no results")])
 
-    with (
-        patch(TAVILY_PATCH, return_value=mock_client),
-        patch(SLEEP_PATCH, new_callable=AsyncMock),
-    ):
+    with patch(TAVILY_PATCH, return_value=mock_client):
         from second_brain.nodes.web_research import search_web
 
         result = await search_web(state)
@@ -105,10 +79,7 @@ async def test_search_web_uses_last_message_as_query():
         ]
     )
 
-    with (
-        patch(TAVILY_PATCH, return_value=mock_client),
-        patch(SLEEP_PATCH, new_callable=AsyncMock),
-    ):
+    with patch(TAVILY_PATCH, return_value=mock_client):
         from second_brain.nodes.web_research import search_web
 
         await search_web(state)
