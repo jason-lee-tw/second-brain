@@ -41,8 +41,12 @@ async def build_query_graph(postgres_url: str) -> tuple:
     pool = AsyncConnectionPool(conninfo=postgres_url, open=False)
     await pool.open()
 
-    checkpointer = AsyncPostgresSaver(pool)
-    await checkpointer.setup()
+    try:
+        checkpointer = AsyncPostgresSaver(pool)
+        await checkpointer.setup()
+    except Exception:
+        await pool.close()
+        raise
 
     workflow = StateGraph(SecondBrainState)
 

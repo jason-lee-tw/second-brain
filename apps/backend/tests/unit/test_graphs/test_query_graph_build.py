@@ -190,3 +190,24 @@ async def test_build_query_graph_calls_checkpointer_setup():
         await build_query_graph("postgresql://fake:fake@localhost:5432/test")
 
     mock_saver.setup.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_build_query_graph_closes_pool_on_checkpointer_setup_failure():
+    """build_query_graph must close the pool if checkpointer.setup() raises."""
+    mock_pool = AsyncMock()
+    mock_pool_class = MagicMock(return_value=mock_pool)
+    mock_saver = MagicMock()
+    mock_saver.setup = AsyncMock(side_effect=RuntimeError("setup failed"))
+
+    with (
+        patch("second_brain.graphs.query_graph.AsyncConnectionPool", mock_pool_class),
+        patch("second_brain.graphs.query_graph.AsyncPostgresSaver") as MockSaver,
+    ):
+        MockSaver.return_value = mock_saver
+        from second_brain.graphs.query_graph import build_query_graph
+
+        with pytest.raises(RuntimeError, match="setup failed"):
+            await build_query_graph("postgresql://fake:fake@localhost:5432/test")
+
+    mock_pool.close.assert_called_once()
