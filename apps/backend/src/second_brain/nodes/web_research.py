@@ -1,0 +1,24 @@
+"""Web Research node: queries Tavily search API."""
+
+import asyncio
+
+from tavily import TavilyClient
+
+from second_brain.config import settings
+from second_brain.graphs.state import SecondBrainState
+
+
+async def search_web(state: SecondBrainState) -> dict:
+    """Search the web using Tavily and return up to 3 results."""
+    query = state["messages"][-1].content
+    client = TavilyClient(api_key=settings.tavily_api_key.get_secret_value())
+    response = await asyncio.to_thread(lambda: client.search(query, max_results=3))
+    web_results = [
+        {
+            "title": r.get("title", ""),
+            "url": r.get("url", ""),
+            "content": r.get("content", ""),
+        }
+        for r in response.get("results", [])
+    ]
+    return {"web_results": web_results}

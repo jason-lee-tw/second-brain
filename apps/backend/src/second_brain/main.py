@@ -5,8 +5,11 @@ from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from second_brain.api.routers.ingest import router as ingest_router
+from second_brain.api.routers.query import router as query_router
+from second_brain.api.routers.query import shutdown_query_graph
 from second_brain.config import settings
 from second_brain.nodes import ingestion_agent
+from second_brain.nodes.rag_retrieval import shutdown_rag_pool
 from second_brain.observability.tracing import setup_tracing
 from second_brain.services import embeddings
 
@@ -33,6 +36,14 @@ async def lifespan(app: FastAPI):
         await ingestion_agent.shutdown()
     except Exception:
         _logger.warning("ingestion_agent.shutdown() raised an exception", exc_info=True)
+    try:
+        await shutdown_query_graph()
+    except Exception:
+        _logger.warning("shutdown_query_graph() raised an exception", exc_info=True)
+    try:
+        await shutdown_rag_pool()
+    except Exception:
+        _logger.warning("shutdown_rag_pool() raised an exception", exc_info=True)
 
 
 app = FastAPI(title="Second Brain", version="0.1.0", lifespan=lifespan)
@@ -42,6 +53,7 @@ app = FastAPI(title="Second Brain", version="0.1.0", lifespan=lifespan)
 FastAPIInstrumentor.instrument_app(app)
 
 app.include_router(ingest_router)
+app.include_router(query_router)
 
 
 @app.get("/health")

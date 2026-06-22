@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,11 @@ class Settings(BaseSettings):
     embedding_model: str = "qwen3-embedding:0.6b"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def postgres_url(self) -> str:
+        """Plain postgresql:// URL for asyncpg/psycopg3 (strips any +driver suffix)."""
+        return re.sub(r"\+[^:/]+", "", self.database_url, count=1)
 
     @model_validator(mode="before")
     @classmethod

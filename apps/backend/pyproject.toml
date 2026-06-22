@@ -25,6 +25,11 @@ dependencies = [
     "presidio-analyzer>=2.2.0",
     "presidio-anonymizer>=2.2.0",
     "spacy>=3.8.0",
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.0",
+    "psycopg-pool>=3.2.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
+    "uuid6>=2024.0.0",
 ]
 
 [project.optional-dependencies]
