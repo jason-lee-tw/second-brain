@@ -3,7 +3,7 @@
 
 import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from langchain_core.messages import HumanMessage
 from uuid6 import uuid7
 
@@ -51,14 +51,9 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         "confidence": 0.0,
         "is_uncertain": False,
     }
-    try:
-        result = await graph.ainvoke(
-            input_state, config={"configurable": {"thread_id": session_id}}
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Query graph error: {exc}"
-        ) from exc
+    result = await graph.ainvoke(
+        input_state, config={"configurable": {"thread_id": session_id}}
+    )
 
     conflict_context = result.get("conflict_context", [])
     return QueryResponse(
