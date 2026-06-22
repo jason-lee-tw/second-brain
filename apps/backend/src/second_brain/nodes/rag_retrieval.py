@@ -1,5 +1,8 @@
 """RAG retrieval node: embeds the user query and fetches top-k chunks via pgvector."""
 
+# ponytail: separate asyncpg pool — pgvector.asyncpg requires asyncpg; LangGraph
+# PostgresSaver requires psycopg3 (psycopg_pool); these two drivers can't share a pool
+
 import asyncio
 
 import asyncpg

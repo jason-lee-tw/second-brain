@@ -15,7 +15,7 @@ from second_brain.nodes.synthesis import synthesize_answer
 from second_brain.nodes.web_research import search_web
 
 
-def _route_retrieval(state: SecondBrainState):
+def _route_retrieval(state: SecondBrainState) -> str | list[Send]:
     """Fan-out router: dispatches parallel retrieval or falls through to synthesis."""
     decision = state["routing_decision"]
     if decision == "both":

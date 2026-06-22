@@ -13,6 +13,8 @@ from second_brain.graphs.query_graph import build_query_graph
 
 router = APIRouter(prefix="/query", tags=["query"])
 
+# ponytail: deferred — refactor to FastAPI DI (app.state + Depends) to eliminate
+# global mutation
 _graph = None
 _pool = None
 _init_lock = asyncio.Lock()
