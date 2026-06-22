@@ -47,6 +47,41 @@ class TestDeprecatedPhoenixKey:
             )
 
 
+class TestPostgresUrl:
+    """postgres_url must strip any +driver suffix regardless of driver name."""
+
+    @pytest.mark.parametrize(
+        "database_url,expected",
+        [
+            (
+                "postgresql+psycopg2://user:pass@host/db",
+                "postgresql://user:pass@host/db",
+            ),
+            (
+                "postgresql+asyncpg://user:pass@host/db",
+                "postgresql://user:pass@host/db",
+            ),
+            (
+                "postgresql+psycopg://user:pass@host/db",
+                "postgresql://user:pass@host/db",
+            ),
+            (
+                "postgresql://user:pass@host/db",
+                "postgresql://user:pass@host/db",
+            ),
+        ],
+    )
+    def test_strips_driver_suffix(self, database_url: str, expected: str) -> None:
+        """postgres_url strips any +driver component from DATABASE_URL."""
+        s = Settings(
+            database_url=database_url,
+            anthropic_api_key="key",
+            tavily_api_key="key",
+            _env_file=None,
+        )
+        assert s.postgres_url == expected
+
+
 class TestApiKeyMasking:
     """API key fields must be masked in repr and str to prevent secret leakage.
 
