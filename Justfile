@@ -78,6 +78,21 @@ lint:
   @uv run ruff check .
 
 
+# Lint with fix for entire workspace
+[group: "Format"]
+lint-fix:
+  @uv run ruff check . --fix
+
+
+# Run type check for backend
+[group: "Format"]
+type-check:
+  @echo "🔄 Type checking..."
+  @cd ./apps/backend && \
+    uv run basedpyright ./src/ && \
+    echo "✅ Type check is completed"
+
+
 # Format entire workspace
 [group: "Format"]
 format:
@@ -105,4 +120,4 @@ test:
 # Check backend implementation (code format, lint, unit + integration test)
 [group: "Test"]
 check-implementation-backend:
-  @just format lint test-unit test-integration
+  @just format lint type-check test-unit test-integration

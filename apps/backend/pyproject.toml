@@ -42,3 +42,8 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/second_brain"]
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.39.8",
+]
