@@ -25,7 +25,6 @@
   "model": "sonnet[1m]",
   "enabledPlugins": {
     "ponytail@ponytail": true,
-    "verifying-implementation@verifying-implementation": true,
     "autonomous-development-plugin@autonomous-development": true
   }
 }
