@@ -4,7 +4,7 @@ from typing import Literal
 from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel
 
-from second_brain.graphs.state import SecondBrainState
+from second_brain.graphs.state import RouteQueryOutput, SecondBrainState
 
 _ROUTING_PROMPT = """\
 You are a query router for a personal knowledge management system (Second Brain).
@@ -30,12 +30,12 @@ class _RoutingOutput(BaseModel):
     routing_decision: Literal["rag", "web", "both", "neither"]
 
 
-_structured_llm = ChatAnthropic(model="claude-haiku-4-5").with_structured_output(
+_structured_llm = ChatAnthropic(model_name="claude-haiku-4-5").with_structured_output(
     _RoutingOutput
 )
 
 
-async def route_query(state: SecondBrainState) -> dict:
+async def route_query(state: SecondBrainState) -> RouteQueryOutput:
     """Graph node: LLM-powered routing using claude-haiku-4-5.
 
     Reads messages[-1].content and retrieved_memory, outputs routing_decision.
@@ -48,5 +48,5 @@ async def route_query(state: SecondBrainState) -> dict:
         else "No memory context available."
     )
     prompt = _ROUTING_PROMPT.format(memory_context=memory_context, query=query)
-    result: _RoutingOutput = await _structured_llm.ainvoke(prompt)
+    result: _RoutingOutput = await _structured_llm.ainvoke(prompt)  # type: ignore[assignment]
     return {"routing_decision": result.routing_decision}

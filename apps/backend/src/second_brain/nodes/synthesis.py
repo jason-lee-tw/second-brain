@@ -4,7 +4,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
 
-from second_brain.graphs.state import SecondBrainState
+from second_brain.graphs.state import SecondBrainState, SynthesisNodeOutput
 
 _UNCERTAINTY_THRESHOLD = 0.7
 # "neither" route = no external retrieval attempted; assume baseline confidence
@@ -18,7 +18,7 @@ class _SynthesisOutput(BaseModel):
     reasoning: str
 
 
-_structured_llm = ChatAnthropic(model="claude-sonnet-4-6").with_structured_output(
+_structured_llm = ChatAnthropic(model_name="claude-sonnet-4-6").with_structured_output(
     _SynthesisOutput
 )
 
@@ -36,7 +36,7 @@ def _format_messages(messages: list[BaseMessage]) -> str:
     return "\n".join(parts)
 
 
-async def synthesize_answer(state: SecondBrainState) -> dict:
+async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
     """LangGraph node: synthesize a final answer with confidence scoring."""
     query = state["messages"][-1].content
     routing = state.get("routing_decision", "neither")
@@ -86,7 +86,7 @@ async def synthesize_answer(state: SecondBrainState) -> dict:
         "- If context is limited, say so honestly and keep confidence lower.\n"
     )
 
-    output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)
+    output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)  # type: ignore[assignment]
 
     confidence = output.confidence
     # Floor confidence for conversational queries: skipping external retrieval
