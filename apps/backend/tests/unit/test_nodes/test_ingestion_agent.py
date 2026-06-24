@@ -142,6 +142,26 @@ async def test_first_failure_goes_to_retry_queue(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_generate_contextual_header_raises_when_no_text_block():
+    """_generate_contextual_header raises ValueError when response has no TextBlock."""
+    mock_response = MagicMock()
+    mock_response.content = []  # no TextBlock
+
+    with patch(
+        "second_brain.nodes.ingestion_agent._anthropic.messages.create",
+        new=AsyncMock(return_value=mock_response),
+    ):
+        from second_brain.nodes.ingestion_agent import _generate_contextual_header
+
+        with pytest.raises(ValueError, match="No TextBlock in Anthropic response"):
+            await _generate_contextual_header(
+                filename="doc.md",
+                heading_path="Intro",
+                chunk_content="Some content here.",
+            )
+
+
+@pytest.mark.asyncio
 async def test_third_failure_moves_to_failed_and_moves_file(tmp_path):
     """After MAX_RETRIES (3) failures, file moves to failed state and failed/ dir."""
     pending = tmp_path / "pending-digest-docs"

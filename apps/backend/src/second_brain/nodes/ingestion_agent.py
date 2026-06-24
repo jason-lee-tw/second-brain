@@ -87,7 +87,9 @@ async def _generate_contextual_header(
         max_tokens=150,
         messages=[{"role": "user", "content": prompt}],
     )
-    text_block = next(b for b in response.content if isinstance(b, TextBlock))
+    text_block = next((b for b in response.content if isinstance(b, TextBlock)), None)
+    if text_block is None:
+        raise ValueError(f"No TextBlock in Anthropic response: {response.content!r}")
     return text_block.text.strip()
 
 
