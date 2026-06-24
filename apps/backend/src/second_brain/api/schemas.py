@@ -1,5 +1,3 @@
-from typing import Optional
-
 from pydantic import AnyHttpUrl, BaseModel
 
 
@@ -14,7 +12,7 @@ class IngestUrlRequest(BaseModel):
 
 class QueryRequest(BaseModel):
     message: str
-    sessionId: Optional[str] = None
+    sessionId: str | None = None
 
 
 class QueryResponse(BaseModel):

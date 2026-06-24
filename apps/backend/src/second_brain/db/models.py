@@ -8,7 +8,7 @@ declarative base. All other code must use `.chunk_metadata` in Python.
 
 import uuid
 from datetime import UTC, datetime
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, DateTime, func
@@ -27,8 +27,8 @@ class ChatHistory(SQLModel, table=True):
     thread_data: dict[str, object] = Field(
         default_factory=dict, sa_column=Column(JSONB, nullable=False)
     )
-    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime | None = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(
             DateTime(timezone=True),
@@ -46,12 +46,12 @@ class IngestedDocument(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     filename: str
-    source_url: Optional[str] = Field(default=None)
+    source_url: str | None = Field(default=None)
     content_hash: str = Field(
         unique=True
     )  # MD5 of raw file content; used to skip re-ingestion
     status: str  # 'processed' | 'failed'
-    ingested_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(UTC))
+    ingested_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DocumentChunk(SQLModel, table=True):
@@ -67,10 +67,10 @@ class DocumentChunk(SQLModel, table=True):
     # Python attr `chunk_metadata` maps to SQL column `metadata`.
     # Do NOT rename the column — the SQL schema uses `metadata`.
     # Do NOT use `metadata` as the Python attr — it conflicts with SQLAlchemy internals.
-    chunk_metadata: Optional[ChunkMetadata] = Field(
+    chunk_metadata: ChunkMetadata | None = Field(
         default=None, sa_column=Column("metadata", JSONB, nullable=True)
     )
-    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class LearnedFact(SQLModel, table=True):
@@ -83,8 +83,8 @@ class LearnedFact(SQLModel, table=True):
     embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
     source_session: str = Field(foreign_key="chat_history.session_id")
     confidence: float
-    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime | None = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(
             DateTime(timezone=True),
@@ -107,4 +107,4 @@ class ModelCorrection(SQLModel, table=True):
     # Embedding encodes `correction` (not `original_answer`) per architecture decision.
     embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
     source_session: str = Field(foreign_key="chat_history.session_id")
-    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
