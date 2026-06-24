@@ -27,7 +27,7 @@ _structured_llm = ChatAnthropic(model="claude-sonnet-4-6").with_structured_outpu
 def _format_messages(messages: list[BaseMessage]) -> str:
     """Format a list of HumanMessage/AIMessage to a readable string.
 
-    # messages in state are expected to be string-content; raise on multi-modal content
+    Messages are expected to have string content; raises on multi-modal content.
     """
     parts: list[str] = []
     for msg in messages:
