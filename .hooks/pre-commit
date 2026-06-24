@@ -1,23 +1,21 @@
-# Uncomment this when format and lint commands are in placed.
+#!/usr/bin/env bash
+set -euo pipefail
 
-# #!/usr/bin/env bash
-# set -euo pipefail
+# Files staged for this commit (added/copied/modified/renamed)
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
 
-# # Files staged for this commit (added/copied/modified/renamed)
-# staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -z "$staged_files" ]; then
+  exit 0
+fi
 
-# if [ -z "$staged_files" ]; then
-#   exit 0
-# fi
+echo "🎨 Running 'just format lint'..."
+just format lint-fix
 
-# echo "🎨 Running 'just format lint'..."
-# just format lint-fix
+just lint
 
-# just lint
+# Re-stage staged files that format/lint may have modified
+echo "$staged_files" | while IFS= read -r file; do
+  [ -e "$file" ] && git add -- "$file"
+done
 
-# # Re-stage staged files that format/lint may have modified
-# echo "$staged_files" | while IFS= read -r file; do
-#   [ -e "$file" ] && git add -- "$file"
-# done
-
-# echo "✅ Pre-commit checks passed."
+echo "✅ Pre-commit checks passed."

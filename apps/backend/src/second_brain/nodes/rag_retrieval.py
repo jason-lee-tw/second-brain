@@ -10,7 +10,9 @@ import httpx
 from pgvector.asyncpg import register_vector
 
 from second_brain.config import settings
-from second_brain.graphs.state import SecondBrainState
+from second_brain.graphs.state import RagResult, RagRetrievalOutput, SecondBrainState
+from second_brain.services.chunking import ChunkMetadata
+from second_brain.utils import get_str_content
 
 _rag_pool: asyncpg.Pool | None = None
 _rag_pool_lock: asyncio.Lock = asyncio.Lock()
@@ -33,6 +35,17 @@ async def shutdown_rag_pool() -> None:
         _rag_pool = None
 
 
+def _row_to_chunk_metadata(row_meta: object) -> ChunkMetadata:
+    # asyncpg.Record has no stubs; dict() triggers 3 pyright codes, same root cause
+    d: dict[str, object] = dict(row_meta)  # pyright: ignore[reportCallIssue, reportAssignmentType, reportArgumentType]
+    return {
+        "source": str(d["source"]),
+        "heading_path": str(d["heading_path"]),
+        "content_type": str(d["content_type"]),
+        "char_count": int(d["char_count"]),  # pyright: ignore[reportArgumentType]
+    }
+
+
 async def _embed_query(query: str, base_url: str) -> list[float]:
     """Call the local Ollama embedding endpoint and return the embedding vector."""
     async with httpx.AsyncClient() as client:
@@ -47,7 +60,7 @@ async def _embed_query(query: str, base_url: str) -> list[float]:
 
 async def _query_pgvector(
     embedding: list[float], postgres_url: str, top_k: int = 5
-) -> list[dict]:
+) -> list[RagResult]:
     """Query the document_chunks table for the top-k most similar chunks."""
     pool = await _get_rag_pool(postgres_url)
     async with pool.acquire() as conn:
@@ -62,17 +75,21 @@ async def _query_pgvector(
         return [
             {
                 "content": r["content"],
-                "score": float(r["score"]),
+                "score": float(r["score"]),  # pyright: ignore[reportUnknownArgumentType]
                 "chunk_index": r["chunk_index"],
-                "metadata": dict(r["metadata"]) if r["metadata"] else {},
+                "metadata": (
+                    _row_to_chunk_metadata(r["metadata"])  # pyright: ignore[reportUnknownArgumentType]
+                    if r["metadata"]
+                    else None
+                ),
             }
             for r in rows
         ]
 
 
-async def retrieve_from_rag(state: SecondBrainState) -> dict:
+async def retrieve_from_rag(state: SecondBrainState) -> RagRetrievalOutput:
     """LangGraph node: retrieves relevant chunks for the latest user message."""
-    query = state["messages"][-1].content
+    query = get_str_content(state["messages"][-1])
     embedding = await _embed_query(query, settings.ollama_base_url)
     rows = await _query_pgvector(embedding, settings.postgres_url)
     return {"rag_results": rows}

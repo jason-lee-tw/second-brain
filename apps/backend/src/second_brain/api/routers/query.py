@@ -54,7 +54,8 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         "is_uncertain": False,
     }
     result = await graph.ainvoke(
-        input_state, config={"configurable": {"thread_id": session_id}}
+        input_state,  # pyright: ignore[reportArgumentType]
+        config={"configurable": {"thread_id": session_id}},
     )
 
     conflict_context = result.get("conflict_context", [])

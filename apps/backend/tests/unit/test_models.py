@@ -61,7 +61,12 @@ class TestDocumentChunk:
             content="This chunk discusses Python basics.",
             embedding=[0.1] * 1024,
             chunk_index=0,
-            chunk_metadata={"source": "notes.md", "heading_path": "Introduction"},
+            chunk_metadata={
+                "source": "notes.md",
+                "heading_path": "Introduction",
+                "content_type": "article",
+                "char_count": 34,
+            },
             created_at=datetime.now(UTC),
         )
         assert record.content == "This chunk discusses Python basics."

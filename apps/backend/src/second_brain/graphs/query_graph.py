@@ -1,8 +1,11 @@
 # apps/backend/src/second_brain/graphs/query_graph.py
 """SecondBrain query LangGraph with PostgresSaver checkpointing."""
 
+from typing import Any
+
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Send
 from psycopg_pool import AsyncConnectionPool
 
@@ -28,7 +31,12 @@ def _route_retrieval(state: SecondBrainState) -> str | list[Send]:
         return "synthesis"
 
 
-async def build_query_graph(postgres_url: str) -> tuple:
+async def build_query_graph(
+    postgres_url: str,
+) -> tuple[
+    CompiledStateGraph[SecondBrainState, None, SecondBrainState, SecondBrainState],
+    AsyncConnectionPool[Any],
+]:
     """Build and compile the SecondBrain query graph with Postgres checkpointing.
 
     Args:
@@ -42,7 +50,7 @@ async def build_query_graph(postgres_url: str) -> tuple:
     await pool.open()
 
     try:
-        checkpointer = AsyncPostgresSaver(pool)
+        checkpointer = AsyncPostgresSaver(pool)  # pyright: ignore[reportArgumentType]
         await checkpointer.setup()
     except Exception:
         await pool.close()

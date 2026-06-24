@@ -4,7 +4,8 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
 
-from second_brain.graphs.state import SecondBrainState
+from second_brain.graphs.state import SecondBrainState, SynthesisNodeOutput
+from second_brain.utils import get_str_content
 
 _UNCERTAINTY_THRESHOLD = 0.7
 # "neither" route = no external retrieval attempted; assume baseline confidence
@@ -18,27 +19,30 @@ class _SynthesisOutput(BaseModel):
     reasoning: str
 
 
-_structured_llm = ChatAnthropic(model="claude-sonnet-4-6").with_structured_output(
+_structured_llm = ChatAnthropic(model="claude-sonnet-4-6").with_structured_output(  # pyright: ignore[reportCallIssue]  # langchain-anthropic stubs don't expose model= as __init__ kwarg
     _SynthesisOutput
 )
 
 
 def _format_messages(messages: list[BaseMessage]) -> str:
-    """Format a list of HumanMessage/AIMessage to a readable string."""
-    parts = []
+    """Format a list of HumanMessage/AIMessage to a readable string.
+
+    Messages are expected to have string content; raises on multi-modal content.
+    """
+    parts: list[str] = []
     for msg in messages:
         if isinstance(msg, HumanMessage):
-            parts.append(f"User: {msg.content}")
+            parts.append(f"User: {get_str_content(msg)}")
         elif isinstance(msg, AIMessage):
-            parts.append(f"Assistant: {msg.content}")
+            parts.append(f"Assistant: {get_str_content(msg)}")
         else:
-            parts.append(f"[{type(msg).__name__}]: {msg.content}")
+            parts.append(f"[{type(msg).__name__}]: {get_str_content(msg)}")
     return "\n".join(parts)
 
 
-async def synthesize_answer(state: SecondBrainState) -> dict:
+async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
     """LangGraph node: synthesize a final answer with confidence scoring."""
-    query = state["messages"][-1].content
+    query = get_str_content(state["messages"][-1])
     routing = state.get("routing_decision", "neither")
 
     # Build context sections
@@ -86,7 +90,7 @@ async def synthesize_answer(state: SecondBrainState) -> dict:
         "- If context is limited, say so honestly and keep confidence lower.\n"
     )
 
-    output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)
+    output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
 
     confidence = output.confidence
     # Floor confidence for conversational queries: skipping external retrieval

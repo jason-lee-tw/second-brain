@@ -17,7 +17,7 @@ _logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     provider = setup_tracing(
         phoenix_collection_endpoint=settings.phoenix_collection_endpoint
     )

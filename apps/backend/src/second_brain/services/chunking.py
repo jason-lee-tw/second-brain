@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from typing import TypedDict
 
 import tiktoken
 
@@ -14,11 +15,18 @@ TRANSCRIPTION_MAX = 512
 TRANSCRIPTION_OVERLAP = 0
 
 
+class ChunkMetadata(TypedDict):
+    source: str
+    heading_path: str
+    content_type: str
+    char_count: int
+
+
 @dataclass
 class Chunk:
     content: str
     chunk_index: int
-    metadata: dict  # {source, heading_path, content_type, char_count}
+    metadata: ChunkMetadata  # {source, heading_path, content_type, char_count}
 
 
 def count_tokens(text: str) -> int:
@@ -157,7 +165,7 @@ def _merge_into_chunks(
 
 
 def chunk_document(content: str, source: str) -> list[Chunk]:
-    """Hybrid chunking: headings → paragraphs → sentences; code fences are atomic."""
+    """Hybrid chunking: headings -> paragraphs -> sentences; code fences are atomic."""
     if not content.strip():
         return []
 

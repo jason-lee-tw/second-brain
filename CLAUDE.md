@@ -37,6 +37,7 @@ just init        # uv sync --all-extras (installs all workspace members + dev to
 just up-all      # run backend + Phoenix via Docker Compose and start Ollama
 just lint        # ruff check across entire workspace
 just test-unit   # run apps/backend unit tests
+just type-check  # run apps/backend type check
 ```
 
 TDD is expected: new code ships with tests for the happy path and 2+ edge cases (see Done Means).
@@ -56,13 +57,14 @@ ALWAYS verify before claiming a task done/fixed/verified — passing tests are n
 but NOT sufficient. A task is complete only when ALL hold:
 
 1. `just lint` and `just format` pass with no changes.
-2. `just test-unit` passes (TDD — write a failing test first; new code ships with tests
+2. `just type-check` pass without any error and warning.
+3. `just test-unit` passes (TDD — write a failing test first; new code ships with tests
    for the happy path and 2+ edge cases).
-3. Behavior is observed on the running system, not just inferred. For any change with
+4. Behavior is observed on the running system, not just inferred. For any change with
    runtime behavior (backend, HTTP, DB, agent, tracing): boot it (`just up-all` or
    `uvicorn`), exercise the actual path, and confirm the observed output (HTTP status,
    response body, log line, trace) matches the acceptance criteria.
-4. Implementation is reviewed and clear all issues raised by using skill `enhanced-review`.
+5. Implementation is reviewed and clear all issues raised by using skill `enhanced-review`.
 
 Do NOT say "done", "fixed", "verified", or "works" without that evidence in hand. If
 runtime behavior can't be observed, say so and name the blocker — never assume.

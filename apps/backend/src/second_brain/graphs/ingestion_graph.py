@@ -1,10 +1,11 @@
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
-from second_brain.graphs.state import IngestionState
+from second_brain.graphs.state import IngestionState, PickFileOutput
 from second_brain.nodes.ingestion_agent import ingestion_agent_node
 
 
-def pick_file_node(state: IngestionState) -> dict:
+def pick_file_node(state: IngestionState) -> PickFileOutput:
     """Move the next pending or retry file into in_progress.
 
     Priority: files[] (first-timers) before retry_queue.
@@ -30,7 +31,9 @@ def _route_after_ingest(state: IngestionState) -> str:
     return END
 
 
-def build_ingestion_graph() -> StateGraph:
+def build_ingestion_graph() -> CompiledStateGraph[
+    IngestionState, None, IngestionState, IngestionState
+]:
     builder = StateGraph(IngestionState)
 
     builder.add_node("pick_file", pick_file_node)

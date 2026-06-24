@@ -1,5 +1,33 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "extraPaths": ["apps/backend/src"]
+  "extraPaths": ["apps/backend/src"],
+  // pgvector, asyncpg, tavily-python, tiktoken, presidio-*, arize-phoenix-otel, psycopg-pool
+  // all ship without stubs or py.typed; remove when all have stubs installed
+  "reportMissingTypeStubs": "none",
+  // asyncpg.Record subscript access and SQLModel metaclass column descriptors resolve to Unknown
+  // re-enable when asyncpg-stubs (PyPI) and sqlmodel stubs cover these surfaces
+  "reportUnknownMemberType": "none",
+  // variables inferred from Unknown-typed asyncpg rows and SQLModel expressions
+  // re-enable together with reportUnknownMemberType
+  "reportUnknownVariableType": "none",
+  // kept at warning so unknown-type propagation stays visible without blocking CI
+  "reportUnknownArgumentType": "warning",
+  // kept at warning so unknown lambda inference stays visible without blocking CI
+  "reportUnknownLambdaType": "warning",
+  // AsyncConnectionPool[Any] in query_graph.py (psycopg_pool generic not re-exported)
+  // and Callable[..., Any] in tracing.py decorator factory
+  "reportAny": "none",
+  // CompiledStateGraph internal type params and psycopg_pool generics use explicit Any
+  // remove when langgraph and psycopg_pool expose concrete types for these params
+  "reportExplicitAny": "none",
+  // Path.rename() return is intentionally discarded in ingestion_agent.py (3 sites)
+  // remove if ruff ARG001 or a linter enforces explicit discard (_= ...) instead
+  "reportUnusedCallResult": "none",
+  // SQLModel/SQLAlchemy metaclass injects __table__, __mapper__, metadata as unannotated
+  // class attributes at runtime on all five table models; not annotatable without stubs
+  "reportUnannotatedClassAttribute": "none",
+  // adjacent string literals used for multi-line SQL in rag_retrieval.py and LLM
+  // prompts in ingestion_agent.py and synthesis.py; intentional for readability
+  "reportImplicitStringConcatenation": "none"
 }

@@ -7,11 +7,28 @@ from langchain_core.messages import HumanMessage
 from second_brain.graphs.state import (
     CorrectionUpdate,
     FactUpdate,
+    IngestionAgentOutput,
     MemoryItem,
+    PickFileOutput,
     RagResult,
+    RagRetrievalOutput,
+    RedactInboundOutput,
+    RedactOutboundOutput,
+    RetrieveMemoryOutput,
+    RouteQueryOutput,
     SecondBrainState,
+    SynthesisNodeOutput,
+    WebResearchOutput,
     WebResult,
 )
+from second_brain.services.chunking import ChunkMetadata
+
+_FULL_META: ChunkMetadata = {
+    "source": "file.md",
+    "heading_path": "",
+    "content_type": "article",
+    "char_count": 42,
+}
 
 
 def test_rag_result_construction():
@@ -20,12 +37,12 @@ def test_rag_result_construction():
         "content": "Some chunk content",
         "score": 0.87,
         "chunk_index": 2,
-        "metadata": {"source": "file.md"},
+        "metadata": _FULL_META,
     }
     assert result["content"] == "Some chunk content"
     assert result["score"] == 0.87
     assert result["chunk_index"] == 2
-    assert result["metadata"] == {"source": "file.md"}
+    assert result["metadata"] == _FULL_META
 
 
 def test_web_result_construction():
@@ -148,7 +165,7 @@ def test_second_brain_state_with_rag_results():
         "content": "chunk text",
         "score": 0.92,
         "chunk_index": 0,
-        "metadata": {},
+        "metadata": _FULL_META,
     }
     web: WebResult = {
         "title": "Page Title",
@@ -170,3 +187,126 @@ def test_second_brain_state_with_rag_results():
     assert state["rag_results"][0]["score"] == 0.92
     assert len(state["web_results"]) == 1
     assert state["web_results"][0]["url"] == "https://example.com"
+
+
+def test_chunk_metadata_construction():
+    meta: ChunkMetadata = {
+        "source": "intro.md",
+        "heading_path": "Getting Started > Install",
+        "content_type": "article",
+        "char_count": 512,
+    }
+    assert meta["source"] == "intro.md"
+    assert meta["char_count"] == 512
+
+
+def test_pick_file_output_with_files():
+    out: PickFileOutput = {"in_progress": "doc.md", "files": ["b.md"]}
+    assert out["in_progress"] == "doc.md"
+
+
+def test_pick_file_output_without_files():
+    out: PickFileOutput = {"in_progress": None}
+    assert out["in_progress"] is None
+
+
+def test_ingestion_agent_output_success():
+    out: IngestionAgentOutput = {
+        "processed": ["doc.md"],
+        "in_progress": None,
+        "retry_queue": [],
+    }
+    assert out["processed"] == ["doc.md"]
+
+
+def test_ingestion_agent_output_terminal_failure():
+    from second_brain.graphs.state import FailedFile
+
+    entry: FailedFile = {"filename": "bad.md", "error": "boom", "retry_count": 3}
+    out: IngestionAgentOutput = {
+        "in_progress": None,
+        "retry_queue": [],
+        "failed": [entry],
+    }
+    assert out["failed"][0]["filename"] == "bad.md"
+
+
+def test_redact_inbound_output():
+    from langchain_core.messages import HumanMessage
+
+    out: RedactInboundOutput = {"messages": [HumanMessage(content="hi")]}
+    assert len(out["messages"]) == 1
+
+
+def test_redact_outbound_output():
+    out: RedactOutboundOutput = {"final_answer": "safe answer"}
+    assert out["final_answer"] == "safe answer"
+
+
+def test_retrieve_memory_output():
+    out: RetrieveMemoryOutput = {"retrieved_memory": []}
+    assert out["retrieved_memory"] == []
+
+
+def test_route_query_output():
+    out: RouteQueryOutput = {"routing_decision": "rag"}
+    assert out["routing_decision"] == "rag"
+
+
+def test_rag_retrieval_output():
+    from second_brain.graphs.state import RagResult
+
+    result: RagResult = {
+        "content": "chunk",
+        "score": 0.9,
+        "chunk_index": 0,
+        "metadata": {
+            "source": "f.md",
+            "heading_path": "",
+            "content_type": "article",
+            "char_count": 100,
+        },
+    }
+    out: RagRetrievalOutput = {"rag_results": [result]}
+    assert len(out["rag_results"]) == 1
+
+
+def test_web_research_output():
+    from second_brain.graphs.state import WebResult
+
+    r: WebResult = {"title": "T", "url": "https://x.com", "content": "body"}
+    out: WebResearchOutput = {"web_results": [r]}
+    assert len(out["web_results"]) == 1
+
+
+def test_synthesis_node_output():
+    out: SynthesisNodeOutput = {
+        "final_answer": "42",
+        "confidence": 0.9,
+        "is_uncertain": False,
+    }
+    assert out["final_answer"] == "42"
+    assert not out["is_uncertain"]
+
+
+def test_rag_result_metadata_is_typed():
+    hints = typing.get_type_hints(RagResult)
+    # metadata is now ChunkMetadata | None (Optional[ChunkMetadata])
+    args = typing.get_args(hints["metadata"])
+    assert ChunkMetadata in args
+    assert type(None) in args
+
+
+def test_rag_result_metadata_can_be_none():
+    result: RagResult = {
+        "content": "chunk with no metadata",
+        "score": 0.5,
+        "chunk_index": 0,
+        "metadata": None,
+    }
+    assert result["metadata"] is None
+
+
+def test_pick_file_output_files_is_not_required():
+    hints = typing.get_type_hints(PickFileOutput, include_extras=True)
+    assert typing.get_origin(hints["files"]) is typing.NotRequired
