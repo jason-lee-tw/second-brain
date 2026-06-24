@@ -7,6 +7,71 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from tests.unit.conftest import make_state
 
+# ---------------------------------------------------------------------------
+# TDD tests: _format_messages helper
+# Tests (a) and (b) per the approved plan.
+# ---------------------------------------------------------------------------
+
+
+def test_format_messages_str_content_passes_through():
+    """_format_messages works correctly for normal string-content messages.
+
+    Regression guard — expected GREEN before and after the fix.
+    """
+    from second_brain.nodes.synthesis import _format_messages
+
+    messages = [HumanMessage(content="hello"), AIMessage(content="world")]
+    result = _format_messages(messages)
+
+    assert "hello" in result
+    assert "world" in result
+
+
+def test_format_messages_raises_on_list_content():
+    """_format_messages raises TypeError when a message has list (multi-modal) content.
+
+    Expected RED before fix (bare .content silently formats list),
+    GREEN after fix (get_str_content raises TypeError).
+    """
+    from second_brain.nodes.synthesis import _format_messages
+
+    msg = AIMessage(content=[{"type": "text", "text": "hi"}])
+    with pytest.raises(TypeError):
+        _format_messages([msg])
+
+
+# ---------------------------------------------------------------------------
+# TDD test (c): synthesize_answer raises TypeError on list-content query
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_synthesize_answer_raises_on_list_content_query():
+    """synthesize_answer raises TypeError when the last message has list content.
+
+    Expected RED before fix (bare .content silently assigns the list),
+    GREEN after fix (get_str_content raises TypeError).
+
+    Uses a proper AsyncMock so the TypeError must come from get_str_content,
+    not from awaiting a plain MagicMock.
+    """
+    mock_output = _make_synthesis_output(
+        final_answer="some answer",
+        confidence=0.8,
+        reasoning="ok",
+    )
+    state = make_state(
+        messages=[HumanMessage(content=[{"type": "text", "text": "hi"}])],
+        routing_decision="rag",
+    )
+
+    with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+        mock_llm.ainvoke = AsyncMock(return_value=mock_output)
+        from second_brain.nodes.synthesis import synthesize_answer
+
+        with pytest.raises(TypeError):
+            await synthesize_answer(state)
+
 
 def _make_synthesis_output(final_answer: str, confidence: float, reasoning: str):
     """Create a mock _SynthesisOutput-like object."""

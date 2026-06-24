@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
 
 from second_brain.graphs.state import SecondBrainState, SynthesisNodeOutput
+from second_brain.utils import get_str_content
 
 _UNCERTAINTY_THRESHOLD = 0.7
 # "neither" route = no external retrieval attempted; assume baseline confidence
@@ -24,21 +25,24 @@ _structured_llm = ChatAnthropic(model_name="claude-sonnet-4-6").with_structured_
 
 
 def _format_messages(messages: list[BaseMessage]) -> str:
-    """Format a list of HumanMessage/AIMessage to a readable string."""
+    """Format a list of HumanMessage/AIMessage to a readable string.
+
+    # messages in state are expected to be string-content; raise on multi-modal content
+    """
     parts = []
     for msg in messages:
         if isinstance(msg, HumanMessage):
-            parts.append(f"User: {msg.content}")
+            parts.append(f"User: {get_str_content(msg)}")
         elif isinstance(msg, AIMessage):
-            parts.append(f"Assistant: {msg.content}")
+            parts.append(f"Assistant: {get_str_content(msg)}")
         else:
-            parts.append(f"[{type(msg).__name__}]: {msg.content}")
+            parts.append(f"[{type(msg).__name__}]: {get_str_content(msg)}")
     return "\n".join(parts)
 
 
 async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
     """LangGraph node: synthesize a final answer with confidence scoring."""
-    query = state["messages"][-1].content
+    query = get_str_content(state["messages"][-1])
     routing = state.get("routing_decision", "neither")
 
     # Build context sections
