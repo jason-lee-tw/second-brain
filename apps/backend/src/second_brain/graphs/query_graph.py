@@ -46,6 +46,9 @@ async def build_query_graph(
         A ``(compiled_graph, pool)`` tuple — the caller is responsible for closing
         the pool on shutdown via ``await pool.close()``.
     """
+    # autocommit=True: psycopg3 wraps connections in an implicit transaction by
+    # default; AsyncPostgresSaver.setup() runs CREATE INDEX CONCURRENTLY, which
+    # cannot execute inside a transaction block.
     pool = AsyncConnectionPool(
         conninfo=postgres_url, open=False, kwargs={"autocommit": True}
     )
