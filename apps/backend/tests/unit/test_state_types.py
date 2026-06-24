@@ -23,7 +23,7 @@ from second_brain.graphs.state import (
 )
 from second_brain.services.chunking import ChunkMetadata
 
-_FULL_META = {
+_FULL_META: ChunkMetadata = {
     "source": "file.md",
     "heading_path": "",
     "content_type": "article",
@@ -291,7 +291,20 @@ def test_synthesis_node_output():
 
 def test_rag_result_metadata_is_typed():
     hints = typing.get_type_hints(RagResult)
-    assert hints["metadata"].__origin__ is dict
+    # metadata is now ChunkMetadata | None (Optional[ChunkMetadata])
+    args = typing.get_args(hints["metadata"])
+    assert ChunkMetadata in args
+    assert type(None) in args
+
+
+def test_rag_result_metadata_can_be_none():
+    result: RagResult = {
+        "content": "chunk with no metadata",
+        "score": 0.5,
+        "chunk_index": 0,
+        "metadata": None,
+    }
+    assert result["metadata"] is None
 
 
 def test_pick_file_output_files_is_not_required():

@@ -15,6 +15,8 @@ from sqlalchemy import Column, DateTime, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
+from second_brain.services.chunking import ChunkMetadata
+
 
 class ChatHistory(SQLModel, table=True):
     """LangGraph session state — UUID7 string is also the LangGraph thread_id."""
@@ -65,7 +67,7 @@ class DocumentChunk(SQLModel, table=True):
     # Python attr `chunk_metadata` maps to SQL column `metadata`.
     # Do NOT rename the column — the SQL schema uses `metadata`.
     # Do NOT use `metadata` as the Python attr — it conflicts with SQLAlchemy internals.
-    chunk_metadata: Optional[dict[str, str | int]] = Field(
+    chunk_metadata: Optional[ChunkMetadata] = Field(
         default=None, sa_column=Column("metadata", JSONB, nullable=True)
     )
     created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(UTC))

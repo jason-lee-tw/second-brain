@@ -12,6 +12,7 @@ from pgvector.asyncpg import register_vector
 
 from second_brain.config import settings
 from second_brain.graphs.state import RagResult, RagRetrievalOutput, SecondBrainState
+from second_brain.services.chunking import ChunkMetadata
 from second_brain.utils import get_str_content
 
 _rag_pool: asyncpg.Pool | None = None
@@ -66,9 +67,12 @@ async def _query_pgvector(
                 "content": r["content"],
                 "score": float(r["score"]),
                 "chunk_index": r["chunk_index"],
-                "metadata": cast(
-                    "dict[str, str | int]",
-                    dict(r["metadata"]) if r["metadata"] else {},
+                "metadata": (
+                    # cast via object: pyright rejects dict→TypedDict directly;
+                    # widening to object first makes narrowing to ChunkMetadata legal.
+                    cast("ChunkMetadata", cast(object, dict(r["metadata"])))
+                    if r["metadata"]
+                    else None
                 ),
             }
             for r in rows

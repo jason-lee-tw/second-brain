@@ -3,6 +3,8 @@ from typing import Annotated, Literal, NotRequired, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
+from second_brain.services.chunking import ChunkMetadata
+
 
 class FailedFile(TypedDict):
     filename: str
@@ -30,7 +32,7 @@ class RagResult(TypedDict):
     content: str
     score: float
     chunk_index: int
-    metadata: dict[str, str | int]
+    metadata: ChunkMetadata | None
 
 
 class WebResult(TypedDict):

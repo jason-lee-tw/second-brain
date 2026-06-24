@@ -106,7 +106,7 @@ async def _process_one_chunk(
         content=embedded_text,
         embedding=embedding,
         chunk_index=chunk.chunk_index,
-        chunk_metadata=chunk.metadata,  # pyright: ignore[reportArgumentType]
+        chunk_metadata=chunk.metadata,
     )
 
 
