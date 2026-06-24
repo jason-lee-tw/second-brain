@@ -46,7 +46,9 @@ async def build_query_graph(
         A ``(compiled_graph, pool)`` tuple — the caller is responsible for closing
         the pool on shutdown via ``await pool.close()``.
     """
-    pool = AsyncConnectionPool(conninfo=postgres_url, open=False)
+    pool = AsyncConnectionPool(
+        conninfo=postgres_url, open=False, kwargs={"autocommit": True}
+    )
     await pool.open()
 
     try:

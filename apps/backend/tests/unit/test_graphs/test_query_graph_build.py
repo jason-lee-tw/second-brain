@@ -211,3 +211,27 @@ async def test_build_query_graph_closes_pool_on_checkpointer_setup_failure():
             await build_query_graph("postgresql://fake:fake@localhost:5432/test")
 
     mock_pool.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_build_query_graph_pool_uses_autocommit():
+    """Pool must use autocommit=True so LangGraph DDL runs outside a transaction."""
+    mock_pool = AsyncMock()
+    mock_pool_class = MagicMock(return_value=mock_pool)
+    mock_saver = MagicMock()
+    mock_saver.setup = AsyncMock()
+
+    with (
+        patch("second_brain.graphs.query_graph.AsyncConnectionPool", mock_pool_class),
+        patch("second_brain.graphs.query_graph.AsyncPostgresSaver") as MockSaver,
+    ):
+        MockSaver.return_value = mock_saver
+        from second_brain.graphs.query_graph import build_query_graph
+
+        await build_query_graph("postgresql://fake:fake@localhost:5432/test")
+
+    mock_pool_class.assert_called_once_with(
+        conninfo="postgresql://fake:fake@localhost:5432/test",
+        open=False,
+        kwargs={"autocommit": True},
+    )
