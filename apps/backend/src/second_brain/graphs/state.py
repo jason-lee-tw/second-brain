@@ -22,7 +22,7 @@ class IngestionState(TypedDict):
 
 
 # ---------------------------------------------------------------------------
-# SecondBrainState — query graph state
+# SecondBrainState -- query graph state
 # ---------------------------------------------------------------------------
 
 
@@ -30,7 +30,7 @@ class RagResult(TypedDict):
     content: str
     score: float
     chunk_index: int
-    metadata: dict
+    metadata: dict[str, str | int]
 
 
 class WebResult(TypedDict):
@@ -73,3 +73,50 @@ class SecondBrainState(TypedDict):
     conflict_context: NotRequired[list[str]]  # Ticket 5: memory-correction
     fact_updates: NotRequired[list[FactUpdate]]  # Ticket 5: memory-correction
     correction_updates: NotRequired[list[CorrectionUpdate]]  # T5: memory-correction
+
+
+# ---------------------------------------------------------------------------
+# Per-node output TypedDicts
+# ---------------------------------------------------------------------------
+
+
+class PickFileOutput(TypedDict):
+    in_progress: str | None
+    files: NotRequired[list[str]]
+
+
+class IngestionAgentOutput(TypedDict, total=False):
+    in_progress: str | None
+    retry_queue: list[FailedFile]
+    processed: list[str]
+    failed: list[FailedFile]
+
+
+class RedactInboundOutput(TypedDict):
+    messages: list[BaseMessage]
+
+
+class RedactOutboundOutput(TypedDict):
+    final_answer: str
+
+
+class RetrieveMemoryOutput(TypedDict):
+    retrieved_memory: list[MemoryItem]
+
+
+class RouteQueryOutput(TypedDict):
+    routing_decision: Literal["rag", "web", "both", "neither"]
+
+
+class RagRetrievalOutput(TypedDict):
+    rag_results: list[RagResult]
+
+
+class WebResearchOutput(TypedDict):
+    web_results: list[WebResult]
+
+
+class SynthesisNodeOutput(TypedDict):
+    final_answer: str
+    confidence: float
+    is_uncertain: bool
