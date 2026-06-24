@@ -12,3 +12,5 @@ __pycache__/
 .env.*.local
 !.env.template
 .claude/worktrees/
+
+temp
