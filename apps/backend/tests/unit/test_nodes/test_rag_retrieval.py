@@ -164,7 +164,12 @@ async def test_query_pgvector_uses_pool_acquire():
                     "content": "Test content",
                     "score": 0.9,
                     "chunk_index": 0,
-                    "metadata": {"source": "test.md"},
+                    "metadata": {
+                        "source": "test.md",
+                        "heading_path": "",
+                        "content_type": "article",
+                        "char_count": 100,
+                    },
                 }[key]
             }
         )
@@ -197,3 +202,48 @@ async def test_query_pgvector_uses_pool_acquire():
     assert len(result) == 1
     assert result[0]["content"] == "Test content"
     assert result[0]["score"] == 0.9
+
+
+# ---------------------------------------------------------------------------
+# _row_to_chunk_metadata helper tests
+# ---------------------------------------------------------------------------
+
+
+def test_row_to_chunk_metadata_happy_path():
+    from second_brain.nodes.rag_retrieval import _row_to_chunk_metadata
+
+    result = _row_to_chunk_metadata(
+        {
+            "source": "docs/foo.md",
+            "heading_path": "Intro > Setup",
+            "content_type": "article",
+            "char_count": 42,
+        }
+    )
+    assert result["source"] == "docs/foo.md"
+    assert result["heading_path"] == "Intro > Setup"
+    assert result["content_type"] == "article"
+    assert result["char_count"] == 42
+
+
+def test_row_to_chunk_metadata_missing_field():
+    from second_brain.nodes.rag_retrieval import _row_to_chunk_metadata
+
+    with pytest.raises(KeyError):
+        _row_to_chunk_metadata(
+            {"source": "x.md", "heading_path": "", "content_type": "article"}
+        )
+
+
+def test_row_to_chunk_metadata_char_count_none():
+    from second_brain.nodes.rag_retrieval import _row_to_chunk_metadata
+
+    with pytest.raises(TypeError):
+        _row_to_chunk_metadata(
+            {
+                "source": "x.md",
+                "heading_path": "",
+                "content_type": "note",
+                "char_count": None,
+            }
+        )

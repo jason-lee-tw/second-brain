@@ -4,7 +4,6 @@
 # PostgresSaver requires psycopg3 (psycopg_pool); these two drivers can't share a pool
 
 import asyncio
-from typing import cast
 
 import asyncpg
 import httpx
@@ -34,6 +33,16 @@ async def shutdown_rag_pool() -> None:
     if _rag_pool is not None:
         await _rag_pool.close()
         _rag_pool = None
+
+
+def _row_to_chunk_metadata(row_meta: object) -> ChunkMetadata:
+    d: dict[str, object] = dict(row_meta)  # pyright: ignore[reportCallIssue, reportAssignmentType, reportArgumentType]
+    return {
+        "source": str(d["source"]),
+        "heading_path": str(d["heading_path"]),
+        "content_type": str(d["content_type"]),
+        "char_count": int(d["char_count"]),  # pyright: ignore[reportArgumentType]
+    }
 
 
 async def _embed_query(query: str, base_url: str) -> list[float]:
@@ -68,9 +77,7 @@ async def _query_pgvector(
                 "score": float(r["score"]),  # pyright: ignore[reportUnknownArgumentType]
                 "chunk_index": r["chunk_index"],
                 "metadata": (
-                    # cast via object: pyright rejects dict→TypedDict directly;
-                    # widening to object first makes narrowing to ChunkMetadata legal.
-                    cast("ChunkMetadata", cast(object, dict(r["metadata"])))  # pyright: ignore[reportUnknownArgumentType]
+                    _row_to_chunk_metadata(r["metadata"])  # pyright: ignore[reportUnknownArgumentType]
                     if r["metadata"]
                     else None
                 ),
