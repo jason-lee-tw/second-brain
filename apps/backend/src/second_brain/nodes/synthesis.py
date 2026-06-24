@@ -19,7 +19,7 @@ class _SynthesisOutput(BaseModel):
     reasoning: str
 
 
-_structured_llm = ChatAnthropic(model_name="claude-sonnet-4-6").with_structured_output(  # pyright: ignore[reportCallIssue]
+_structured_llm = ChatAnthropic(model="claude-sonnet-4-6").with_structured_output(  # pyright: ignore[reportCallIssue]  # langchain-anthropic stubs don't expose model= as __init__ kwarg
     _SynthesisOutput
 )
 

@@ -31,7 +31,7 @@ class _RoutingOutput(BaseModel):
     routing_decision: Literal["rag", "web", "both", "neither"]
 
 
-_structured_llm = ChatAnthropic(model_name="claude-haiku-4-5").with_structured_output(  # pyright: ignore[reportCallIssue]
+_structured_llm = ChatAnthropic(model="claude-haiku-4-5").with_structured_output(  # pyright: ignore[reportCallIssue]  # langchain-anthropic stubs don't expose model= as __init__ kwarg
     _RoutingOutput
 )
 
