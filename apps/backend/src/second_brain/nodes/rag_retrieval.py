@@ -36,6 +36,7 @@ async def shutdown_rag_pool() -> None:
 
 
 def _row_to_chunk_metadata(row_meta: object) -> ChunkMetadata:
+    # asyncpg.Record has no stubs; dict() triggers 3 pyright codes, same root cause
     d: dict[str, object] = dict(row_meta)  # pyright: ignore[reportCallIssue, reportAssignmentType, reportArgumentType]
     return {
         "source": str(d["source"]),
