@@ -6,7 +6,7 @@
 
 **Architecture:** Fixes fall into three categories: (1) targeted `# type: ignore` comments for third-party library stub gaps where runtime works but stubs disagree; (2) proper TypedDicts for every node's return type in `state.py`; (3) a new `utils.py` with `get_str_content` to narrow `BaseMessage.content` (typed as `str | list`) to `str` with a `TypeError` guard.
 
-**Decisions:** All design decisions (D1–D10), the rationale behind each fix category, and the "no `Any`" constraint are recorded in [`docs/tasks/001-fix-typecheck-error.md`](../../tasks/001-fix-typecheck-error.md). Read that file first if a task's approach is unclear.
+**Decisions:** All design decisions (D1–D10), the rationale behind each fix category, and the "no `Any`" constraint are recorded in [`docs/bugs/001-fix-typecheck-error.md`](../../bugs/001-fix-typecheck-error.md). Read that file first if a task's approach is unclear.
 
 **Tech Stack:** Python 3.12, basedpyright, LangGraph, LangChain-Anthropic, SQLModel, psycopg3, anthropic SDK, presidio
 
@@ -26,10 +26,12 @@
 ### Task 1: `utils.py` — `get_str_content` helper
 
 **Files:**
+
 - Create: `apps/backend/src/second_brain/utils.py`
 - Create: `apps/backend/tests/unit/test_utils.py`
 
 **Interfaces:**
+
 - Produces: `get_str_content(msg: BaseMessage) -> str` — raises `TypeError` if content is not a `str`
 
 - [ ] **Step 1: Write the failing tests**
@@ -129,11 +131,13 @@ git commit -m "feat(types): add get_str_content util to narrow BaseMessage.conte
 Add all per-node output TypedDicts to `state.py` (so nodes never return bare `dict`) and add `ChunkMetadata` to `chunking.py` so that `Chunk.metadata` has precisely typed keys.
 
 **Files:**
+
 - Modify: `apps/backend/src/second_brain/graphs/state.py`
 - Modify: `apps/backend/src/second_brain/services/chunking.py` (add `ChunkMetadata`, update `Chunk.metadata`)
 - Modify: `apps/backend/tests/unit/test_state_types.py` (update metadata fixtures; add output TypedDict tests)
 
 **Interfaces:**
+
 - Produces (from `state.py`):
   - `PickFileOutput`, `IngestionAgentOutput` — for ingestion graph nodes
   - `RedactInboundOutput`, `RedactOutboundOutput`, `RetrieveMemoryOutput`, `RouteQueryOutput`, `RagRetrievalOutput`, `WebResearchOutput`, `SynthesisNodeOutput` — for query graph nodes
@@ -458,6 +462,7 @@ git commit -m "feat(types): add node output TypedDicts and ChunkMetadata"
 Pure annotation / targeted-ignore changes. No behavior change. Verification is `just type-check` showing no errors in these three files.
 
 **Files:**
+
 - Modify: `apps/backend/src/second_brain/db/models.py`
 - Modify: `apps/backend/src/second_brain/config.py`
 - Modify: `apps/backend/src/second_brain/services/pii.py`
@@ -562,10 +567,12 @@ git commit -m "fix(types): add ClassVar annotations and targeted type-ignores fo
 Fix graph builder return types and add targeted ignores for `AsyncPostgresSaver`.
 
 **Files:**
+
 - Modify: `apps/backend/src/second_brain/graphs/ingestion_graph.py`
 - Modify: `apps/backend/src/second_brain/graphs/query_graph.py`
 
 **Interfaces:**
+
 - `build_ingestion_graph() -> CompiledStateGraph[IngestionState, None, IngestionState, IngestionState]`
 - `build_query_graph(postgres_url: str) -> tuple[CompiledStateGraph[SecondBrainState, None, SecondBrainState, SecondBrainState], AsyncConnectionPool[Any]]`
 
@@ -674,9 +681,11 @@ git commit -m "fix(types): annotate graph builder return types with CompiledStat
 ### Task 5: `nodes/ingestion_agent.py` — TextBlock narrowing + return type
 
 **Files:**
+
 - Modify: `apps/backend/src/second_brain/nodes/ingestion_agent.py`
 
 **Interfaces:**
+
 - `ingestion_agent_node(state: IngestionState) -> IngestionAgentOutput`
 
 - [ ] **Step 1: Fix `_generate_contextual_header` — narrow content block to TextBlock**
@@ -740,10 +749,12 @@ git commit -m "fix(types): narrow Anthropic TextBlock and type ingestion_agent_n
 Fix `model=` → `model_name=`, type the structured-output assignment, return proper TypedDicts.
 
 **Files:**
+
 - Modify: `apps/backend/src/second_brain/nodes/orchestrator.py`
 - Modify: `apps/backend/src/second_brain/nodes/synthesis.py`
 
 **Interfaces:**
+
 - `route_query(state: SecondBrainState) -> RouteQueryOutput`
 - `synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput`
 
@@ -848,6 +859,7 @@ git commit -m "fix(types): use model_name= and type node returns for orchestrato
 Apply `get_str_content` in the four nodes that access `messages[-1].content`, fix their return types, and fix the `isinstance(result, BaseException)` guard in the ingest router.
 
 **Files:**
+
 - Modify: `apps/backend/src/second_brain/nodes/pii_redaction.py`
 - Modify: `apps/backend/src/second_brain/nodes/rag_retrieval.py`
 - Modify: `apps/backend/src/second_brain/nodes/web_research.py`
@@ -1104,17 +1116,17 @@ gh pr create \
 
 **Spec coverage check:**
 
-| Error group from `docs/tasks/001-fix-typecheck-error.md` | Task |
-|---|---|
-| D1 — library stub gaps (`type: ignore`) | Tasks 3, 4, 6 |
-| D2 — TextBlock narrowing | Task 5 |
-| D3 — `isinstance(result, BaseException)` | Task 7 |
-| D4 — `CompiledStateGraph` return type | Task 4 |
-| D5 — node output TypedDicts | Task 2 |
-| D6 — `get_str_content` util | Tasks 1, 7 |
-| D7 — presidio `RecognizerResult` ignore | Task 3 |
-| D8 — `AsyncConnectionPool[Any]` exception | Task 4 |
-| D9 — `ClassVar[str]` for `__tablename__` | Task 3 |
-| D10 — `model_name=` in ChatAnthropic | Task 6 |
+| Error group from `docs/bugs/001-fix-typecheck-error.md` | Task          |
+| ------------------------------------------------------- | ------------- |
+| D1 — library stub gaps (`type: ignore`)                 | Tasks 3, 4, 6 |
+| D2 — TextBlock narrowing                                | Task 5        |
+| D3 — `isinstance(result, BaseException)`                | Task 7        |
+| D4 — `CompiledStateGraph` return type                   | Task 4        |
+| D5 — node output TypedDicts                             | Task 2        |
+| D6 — `get_str_content` util                             | Tasks 1, 7    |
+| D7 — presidio `RecognizerResult` ignore                 | Task 3        |
+| D8 — `AsyncConnectionPool[Any]` exception               | Task 4        |
+| D9 — `ClassVar[str]` for `__tablename__`                | Task 3        |
+| D10 — `model_name=` in ChatAnthropic                    | Task 6        |
 
 All 10 decisions covered. No gaps found.
