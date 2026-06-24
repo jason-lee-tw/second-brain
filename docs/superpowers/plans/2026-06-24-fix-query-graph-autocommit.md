@@ -14,11 +14,48 @@
 
 ---
 
-## Task 1: Apply the fix
+## Task 1: Apply the fix (TDD — red → green)
 
 **File:** `apps/backend/src/second_brain/graphs/query_graph.py`, line 49
 
-- [ ] **Step 1: Apply the one-line fix**
+- [ ] **Step 1: Write the failing test (red)**
+
+Add to `apps/backend/tests/unit/test_graphs/test_query_graph_build.py`:
+
+```python
+@pytest.mark.asyncio
+async def test_build_query_graph_pool_uses_autocommit():
+    """AsyncConnectionPool must be constructed with autocommit=True for LangGraph DDL."""
+    mock_pool = AsyncMock()
+    mock_pool_class = MagicMock(return_value=mock_pool)
+    mock_saver = MagicMock()
+    mock_saver.setup = AsyncMock()
+
+    with (
+        patch("second_brain.graphs.query_graph.AsyncConnectionPool", mock_pool_class),
+        patch("second_brain.graphs.query_graph.AsyncPostgresSaver") as MockSaver,
+    ):
+        MockSaver.return_value = mock_saver
+        from second_brain.graphs.query_graph import build_query_graph
+
+        await build_query_graph("postgresql://fake:fake@localhost:5432/test")
+
+    mock_pool_class.assert_called_once_with(
+        conninfo="postgresql://fake:fake@localhost:5432/test",
+        open=False,
+        kwargs={"autocommit": True},
+    )
+```
+
+- [ ] **Step 2: Confirm the test fails (red)**
+
+```bash
+just test-unit
+```
+
+Expected: `test_build_query_graph_pool_uses_autocommit` FAILS — the pool is constructed without `kwargs`.
+
+- [ ] **Step 3: Apply the one-line fix (green)**
 
 ```python
 # BEFORE (line 49)
@@ -28,21 +65,13 @@ pool = AsyncConnectionPool(conninfo=postgres_url, open=False)
 pool = AsyncConnectionPool(conninfo=postgres_url, open=False, kwargs={"autocommit": True})
 ```
 
-- [ ] **Step 2: Run lint and type-check**
+- [ ] **Step 4: Run format, lint, type-check, and unit tests**
 
 ```bash
-just lint && just type-check
+just format && just lint && just type-check && just test-unit
 ```
 
-Expected: no errors.
-
-- [ ] **Step 3: Run unit tests**
-
-```bash
-just test-unit
-```
-
-Expected: all unit tests PASS (no regressions).
+Expected: all pass, including `test_build_query_graph_pool_uses_autocommit`.
 
 ---
 
@@ -80,8 +109,9 @@ Expected: HTTP 200, same `sessionId` returned.
 
 ## Done Checklist
 
+- [ ] `just format` passes
 - [ ] `just lint` passes
 - [ ] `just type-check` passes
-- [ ] `just test-unit` passes
+- [ ] `just test-unit` passes (including `test_build_query_graph_pool_uses_autocommit`)
 - [ ] `POST /query` returns 200 on the running system
 - [ ] Session continuity confirmed (second call with same `sessionId` returns 200)
