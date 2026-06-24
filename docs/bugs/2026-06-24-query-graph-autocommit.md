@@ -39,13 +39,13 @@ psycopg.errors.ActiveSqlTransaction:
 
 ## Five-Why Root Cause
 
-| Why | Finding |
-|-----|---------|
-| Why does `/query` 500? | `checkpointer.setup()` raises `ActiveSqlTransaction` and propagates unhandled |
-| Why does `setup()` raise? | LangGraph's migration SQL contains `CREATE INDEX CONCURRENTLY`, which PostgreSQL forbids inside a transaction block |
-| Why is the connection in a transaction? | `psycopg_pool.AsyncConnectionPool` defaults to `autocommit=False` — every connection wraps statements in an implicit transaction |
-| Why was the pool created without `autocommit=True`? | The implementation plan (Task 9) gave reference code without `kwargs={"autocommit": True}` |
-| Why did the plan omit it? | The author was unaware that `AsyncPostgresSaver.setup()` runs DDL that requires `autocommit=True` — this is a LangGraph-specific requirement not obvious from the API surface |
+| Why                                                 | Finding                                                                                                                                                                       |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Why does `/query` 500?                              | `checkpointer.setup()` raises `ActiveSqlTransaction` and propagates unhandled                                                                                                 |
+| Why does `setup()` raise?                           | LangGraph's migration SQL contains `CREATE INDEX CONCURRENTLY`, which PostgreSQL forbids inside a transaction block                                                           |
+| Why is the connection in a transaction?             | `psycopg_pool.AsyncConnectionPool` defaults to `autocommit=False` — every connection wraps statements in an implicit transaction                                              |
+| Why was the pool created without `autocommit=True`? | The implementation plan (Task 9) gave reference code without `kwargs={"autocommit": True}`                                                                                    |
+| Why did the plan omit it?                           | The author was unaware that `AsyncPostgresSaver.setup()` runs DDL that requires `autocommit=True` — this is a LangGraph-specific requirement not obvious from the API surface |
 
 ## Root Cause
 
