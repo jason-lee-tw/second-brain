@@ -40,4 +40,4 @@ class Settings(BaseSettings):
         return values
 
 
-settings = Settings()  # type: ignore[call-arg]
+settings = Settings()  # pyright: ignore[reportCallIssue]

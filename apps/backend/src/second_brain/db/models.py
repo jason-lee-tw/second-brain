@@ -19,7 +19,7 @@ from sqlmodel import Field, SQLModel
 class ChatHistory(SQLModel, table=True):
     """LangGraph session state — UUID7 string is also the LangGraph thread_id."""
 
-    __tablename__: ClassVar[str] = "chat_history"
+    __tablename__: ClassVar[str] = "chat_history"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     session_id: str = Field(primary_key=True)
     thread_data: dict[str, object] = Field(
@@ -40,7 +40,7 @@ class ChatHistory(SQLModel, table=True):
 class IngestedDocument(SQLModel, table=True):
     """Deduplication record for ingested files and URLs."""
 
-    __tablename__: ClassVar[str] = "ingested_documents"
+    __tablename__: ClassVar[str] = "ingested_documents"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     filename: str
@@ -55,7 +55,7 @@ class IngestedDocument(SQLModel, table=True):
 class DocumentChunk(SQLModel, table=True):
     """A single chunk from an ingested document, with embedding for RAG retrieval."""
 
-    __tablename__: ClassVar[str] = "document_chunks"
+    __tablename__: ClassVar[str] = "document_chunks"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     doc_id: uuid.UUID = Field(foreign_key="ingested_documents.id")
@@ -74,7 +74,7 @@ class DocumentChunk(SQLModel, table=True):
 class LearnedFact(SQLModel, table=True):
     """A user fact extracted from conversation and stored for semantic retrieval."""
 
-    __tablename__: ClassVar[str] = "learned_facts"
+    __tablename__: ClassVar[str] = "learned_facts"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     fact: str  # PII-scrubbed fact text
@@ -96,7 +96,7 @@ class LearnedFact(SQLModel, table=True):
 class ModelCorrection(SQLModel, table=True):
     """A user correction to a model answer; embedding encodes the `correction` field."""
 
-    __tablename__: ClassVar[str] = "model_corrections"
+    __tablename__: ClassVar[str] = "model_corrections"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     original_answer: str

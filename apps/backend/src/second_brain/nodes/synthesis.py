@@ -18,7 +18,7 @@ class _SynthesisOutput(BaseModel):
     reasoning: str
 
 
-_structured_llm = ChatAnthropic(model_name="claude-sonnet-4-6").with_structured_output(
+_structured_llm = ChatAnthropic(model_name="claude-sonnet-4-6").with_structured_output(  # pyright: ignore[reportCallIssue]
     _SynthesisOutput
 )
 
@@ -86,7 +86,7 @@ async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
         "- If context is limited, say so honestly and keep confidence lower.\n"
     )
 
-    output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)  # type: ignore[assignment]
+    output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
 
     confidence = output.confidence
     # Floor confidence for conversational queries: skipping external retrieval

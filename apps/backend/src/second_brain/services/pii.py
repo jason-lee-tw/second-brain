@@ -48,6 +48,8 @@ def redact_pii(text: str) -> str:
     results = _analyzer.analyze(text=text, entities=_ENTITIES, language="en")
     if not results:
         return text
-    return _anonymizer.anonymize(  # type: ignore[arg-type]
-        text=text, analyzer_results=results, operators=_OPERATORS
+    return _anonymizer.anonymize(
+        text=text,
+        analyzer_results=results,  # pyright: ignore[reportArgumentType]
+        operators=_OPERATORS,
     ).text

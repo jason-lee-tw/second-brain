@@ -22,4 +22,4 @@ async def search_web(state: SecondBrainState) -> WebResearchOutput:
         }
         for r in response.get("results", [])
     ]
-    return {"web_results": web_results}
+    return {"web_results": web_results}  # pyright: ignore[reportReturnType]

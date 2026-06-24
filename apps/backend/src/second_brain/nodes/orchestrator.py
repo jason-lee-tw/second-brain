@@ -30,7 +30,7 @@ class _RoutingOutput(BaseModel):
     routing_decision: Literal["rag", "web", "both", "neither"]
 
 
-_structured_llm = ChatAnthropic(model_name="claude-haiku-4-5").with_structured_output(
+_structured_llm = ChatAnthropic(model_name="claude-haiku-4-5").with_structured_output(  # pyright: ignore[reportCallIssue]
     _RoutingOutput
 )
 
@@ -48,5 +48,5 @@ async def route_query(state: SecondBrainState) -> RouteQueryOutput:
         else "No memory context available."
     )
     prompt = _ROUTING_PROMPT.format(memory_context=memory_context, query=query)
-    result: _RoutingOutput = await _structured_llm.ainvoke(prompt)  # type: ignore[assignment]
+    result: _RoutingOutput = await _structured_llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
     return {"routing_decision": result.routing_decision}

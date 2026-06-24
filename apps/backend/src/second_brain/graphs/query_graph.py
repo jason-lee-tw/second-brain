@@ -50,7 +50,7 @@ async def build_query_graph(
     await pool.open()
 
     try:
-        checkpointer = AsyncPostgresSaver(pool)  # type: ignore[arg-type]
+        checkpointer = AsyncPostgresSaver(pool)  # pyright: ignore[reportArgumentType]
         await checkpointer.setup()
     except Exception:
         await pool.close()

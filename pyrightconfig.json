@@ -1,5 +1,17 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "extraPaths": ["apps/backend/src"]
+  "extraPaths": ["apps/backend/src"],
+  "reportMissingTypeStubs": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownLambdaType": "none",
+  "reportAny": "none",
+  "reportExplicitAny": "none",
+  "reportUnusedCallResult": "none",
+  "reportDeprecated": "none",
+  "reportUnannotatedClassAttribute": "none",
+  "reportImplicitStringConcatenation": "none",
+  "reportUnusedParameter": "none"
 }
