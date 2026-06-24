@@ -3102,15 +3102,11 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "basedpyright" },
     { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "basedpyright" },
 ]
 
 [package.metadata]
@@ -3119,6 +3115,7 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.40.0" },
     { name = "arize-phoenix-otel", specifier = ">=0.8" },
     { name = "asyncpg", specifier = ">=0.30.0" },
+    { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.39.8" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "langchain-anthropic", specifier = ">=0.3.0,<1.0" },
@@ -3144,9 +3141,6 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
 provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "basedpyright", specifier = ">=1.39.8" }]
 
 [[package]]
 name = "second-brain-eval"
