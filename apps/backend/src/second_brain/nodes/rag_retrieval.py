@@ -4,13 +4,15 @@
 # PostgresSaver requires psycopg3 (psycopg_pool); these two drivers can't share a pool
 
 import asyncio
+from typing import cast
 
 import asyncpg
 import httpx
 from pgvector.asyncpg import register_vector
 
 from second_brain.config import settings
-from second_brain.graphs.state import SecondBrainState
+from second_brain.graphs.state import RagResult, RagRetrievalOutput, SecondBrainState
+from second_brain.utils import get_str_content
 
 _rag_pool: asyncpg.Pool | None = None
 _rag_pool_lock: asyncio.Lock = asyncio.Lock()
@@ -47,7 +49,7 @@ async def _embed_query(query: str, base_url: str) -> list[float]:
 
 async def _query_pgvector(
     embedding: list[float], postgres_url: str, top_k: int = 5
-) -> list[dict]:
+) -> list[RagResult]:
     """Query the document_chunks table for the top-k most similar chunks."""
     pool = await _get_rag_pool(postgres_url)
     async with pool.acquire() as conn:
@@ -64,15 +66,18 @@ async def _query_pgvector(
                 "content": r["content"],
                 "score": float(r["score"]),
                 "chunk_index": r["chunk_index"],
-                "metadata": dict(r["metadata"]) if r["metadata"] else {},
+                "metadata": cast(
+                    "dict[str, str | int]",
+                    dict(r["metadata"]) if r["metadata"] else {},
+                ),
             }
             for r in rows
         ]
 
 
-async def retrieve_from_rag(state: SecondBrainState) -> dict:
+async def retrieve_from_rag(state: SecondBrainState) -> RagRetrievalOutput:
     """LangGraph node: retrieves relevant chunks for the latest user message."""
-    query = state["messages"][-1].content
+    query = get_str_content(state["messages"][-1])
     embedding = await _embed_query(query, settings.ollama_base_url)
     rows = await _query_pgvector(embedding, settings.postgres_url)
     return {"rag_results": rows}
