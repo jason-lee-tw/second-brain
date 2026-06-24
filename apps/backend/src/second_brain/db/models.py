@@ -8,7 +8,7 @@ declarative base. All other code must use `.chunk_metadata` in Python.
 
 import uuid
 from datetime import UTC, datetime
-from typing import Optional
+from typing import ClassVar, Optional
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, DateTime, func
@@ -19,10 +19,10 @@ from sqlmodel import Field, SQLModel
 class ChatHistory(SQLModel, table=True):
     """LangGraph session state — UUID7 string is also the LangGraph thread_id."""
 
-    __tablename__ = "chat_history"
+    __tablename__: ClassVar[str] = "chat_history"
 
     session_id: str = Field(primary_key=True)
-    thread_data: dict = Field(
+    thread_data: dict[str, object] = Field(
         default_factory=dict, sa_column=Column(JSONB, nullable=False)
     )
     created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(UTC))
@@ -40,7 +40,7 @@ class ChatHistory(SQLModel, table=True):
 class IngestedDocument(SQLModel, table=True):
     """Deduplication record for ingested files and URLs."""
 
-    __tablename__ = "ingested_documents"
+    __tablename__: ClassVar[str] = "ingested_documents"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     filename: str
@@ -55,7 +55,7 @@ class IngestedDocument(SQLModel, table=True):
 class DocumentChunk(SQLModel, table=True):
     """A single chunk from an ingested document, with embedding for RAG retrieval."""
 
-    __tablename__ = "document_chunks"
+    __tablename__: ClassVar[str] = "document_chunks"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     doc_id: uuid.UUID = Field(foreign_key="ingested_documents.id")
@@ -65,7 +65,7 @@ class DocumentChunk(SQLModel, table=True):
     # Python attr `chunk_metadata` maps to SQL column `metadata`.
     # Do NOT rename the column — the SQL schema uses `metadata`.
     # Do NOT use `metadata` as the Python attr — it conflicts with SQLAlchemy internals.
-    chunk_metadata: Optional[dict] = Field(
+    chunk_metadata: Optional[dict[str, str | int]] = Field(
         default=None, sa_column=Column("metadata", JSONB, nullable=True)
     )
     created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(UTC))
@@ -74,7 +74,7 @@ class DocumentChunk(SQLModel, table=True):
 class LearnedFact(SQLModel, table=True):
     """A user fact extracted from conversation and stored for semantic retrieval."""
 
-    __tablename__ = "learned_facts"
+    __tablename__: ClassVar[str] = "learned_facts"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     fact: str  # PII-scrubbed fact text
@@ -96,7 +96,7 @@ class LearnedFact(SQLModel, table=True):
 class ModelCorrection(SQLModel, table=True):
     """A user correction to a model answer; embedding encodes the `correction` field."""
 
-    __tablename__ = "model_corrections"
+    __tablename__: ClassVar[str] = "model_corrections"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     original_answer: str
