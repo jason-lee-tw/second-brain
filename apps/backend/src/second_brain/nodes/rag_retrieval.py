@@ -65,12 +65,12 @@ async def _query_pgvector(
         return [
             {
                 "content": r["content"],
-                "score": float(r["score"]),
+                "score": float(r["score"]),  # pyright: ignore[reportUnknownArgumentType]
                 "chunk_index": r["chunk_index"],
                 "metadata": (
                     # cast via object: pyright rejects dict→TypedDict directly;
                     # widening to object first makes narrowing to ChunkMetadata legal.
-                    cast("ChunkMetadata", cast(object, dict(r["metadata"])))
+                    cast("ChunkMetadata", cast(object, dict(r["metadata"])))  # pyright: ignore[reportUnknownArgumentType]
                     if r["metadata"]
                     else None
                 ),

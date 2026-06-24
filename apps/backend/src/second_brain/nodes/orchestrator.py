@@ -5,6 +5,7 @@ from langchain_anthropic import ChatAnthropic
 from pydantic import BaseModel
 
 from second_brain.graphs.state import RouteQueryOutput, SecondBrainState
+from second_brain.utils import get_str_content
 
 _ROUTING_PROMPT = """\
 You are a query router for a personal knowledge management system (Second Brain).
@@ -40,7 +41,7 @@ async def route_query(state: SecondBrainState) -> RouteQueryOutput:
 
     Reads messages[-1].content and retrieved_memory, outputs routing_decision.
     """
-    query = state["messages"][-1].content
+    query = get_str_content(state["messages"][-1])
     memory = state.get("retrieved_memory", [])
     memory_context = (
         "\n".join(f"- {m['fact']}" for m in memory)

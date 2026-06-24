@@ -29,7 +29,7 @@ def _format_messages(messages: list[BaseMessage]) -> str:
 
     # messages in state are expected to be string-content; raise on multi-modal content
     """
-    parts = []
+    parts: list[str] = []
     for msg in messages:
         if isinstance(msg, HumanMessage):
             parts.append(f"User: {get_str_content(msg)}")
