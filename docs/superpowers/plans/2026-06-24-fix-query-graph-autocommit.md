@@ -2,14 +2,14 @@
 
 **Date:** 2026-06-24  
 **Spec:** `docs/superpowers/specs/2026-06-24-query-graph-autocommit-fix.md`  
-**Bug:** `docs/bugs/2026-06-24-query-graph-autocommit.md`
+**Bug:** `docs/bugs/002-query-graph-autocommit.md`
 
 ---
 
 ## File Map
 
-| Action | Path | Change |
-|--------|------|--------|
+| Action | Path                                                  | Change                                                |
+| ------ | ----------------------------------------------------- | ----------------------------------------------------- |
 | Modify | `apps/backend/src/second_brain/graphs/query_graph.py` | Add `kwargs={"autocommit": True}` to pool constructor |
 
 ---

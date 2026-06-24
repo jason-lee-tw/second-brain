@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-24  
 **Status:** Approved  
-**Related bug:** `docs/bugs/2026-06-24-query-graph-autocommit.md`
+**Related bug:** `docs/bugs/002-query-graph-autocommit.md`
 
 ---
 
@@ -23,7 +23,7 @@ that LangGraph's checkpoint schema migrations run outside any transaction block.
 | AC-1 | `POST /query {"message": "hello"}` returns HTTP 200 (not 500) against a fresh database                                    |
 | AC-2 | `POST /query` response contains `answer`, `sessionId`, `confidence`, `isUncertain`, `conflictDetected`, `conflictContext` |
 | AC-3 | Calling `POST /query` a second time with the returned `sessionId` returns HTTP 200 (session continuity still works)       |
-| AC-4 | `just format`, `just lint`, `just type-check`, and `just test-unit` all pass with no errors                              |
+| AC-4 | `just format`, `just lint`, `just type-check`, and `just test-unit` all pass with no errors                               |
 
 ## Scope
 
