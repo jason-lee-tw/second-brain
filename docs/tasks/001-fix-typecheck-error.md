@@ -7,6 +7,10 @@ Running `just type-check` (basedpyright) exits with code 1 across 12 files.
 
 ---
 
+**Implementation plan:** [`docs/superpowers/plans/2026-06-24-fix-typecheck-errors.md`](../superpowers/plans/2026-06-24-fix-typecheck-errors.md)
+
+---
+
 ## Decisions Made (grilling session 2026-06-24)
 
 ### D1 — Library stub gaps → targeted `# type: ignore[<code>]`

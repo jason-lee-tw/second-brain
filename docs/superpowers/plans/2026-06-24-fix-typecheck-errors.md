@@ -4,7 +4,9 @@
 
 **Goal:** Make `just type-check` exit 0 by fixing all 50 basedpyright errors across 12 backend files, with no use of `Any` in our own code.
 
-**Architecture:** Fixes fall into three categories: (1) targeted `# type: ignore` comments for third-party library stub gaps where runtime works but stubs disagree; (2) proper TypedDicts for every node's return type in `state.py`; (3) a new `utils.py` with `get_str_content` to narrow `BaseMessage.content` (typed as `str | list`) to `str` with a `TypeError` guard. All decisions documented in `docs/tasks/001-fix-typecheck-error.md`.
+**Architecture:** Fixes fall into three categories: (1) targeted `# type: ignore` comments for third-party library stub gaps where runtime works but stubs disagree; (2) proper TypedDicts for every node's return type in `state.py`; (3) a new `utils.py` with `get_str_content` to narrow `BaseMessage.content` (typed as `str | list`) to `str` with a `TypeError` guard.
+
+**Decisions:** All design decisions (D1–D10), the rationale behind each fix category, and the "no `Any`" constraint are recorded in [`docs/tasks/001-fix-typecheck-error.md`](../../tasks/001-fix-typecheck-error.md). Read that file first if a task's approach is unclear.
 
 **Tech Stack:** Python 3.12, basedpyright, LangGraph, LangChain-Anthropic, SQLModel, psycopg3, anthropic SDK, presidio
 
