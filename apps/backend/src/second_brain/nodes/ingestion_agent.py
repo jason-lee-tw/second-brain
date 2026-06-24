@@ -5,12 +5,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import anthropic
+from anthropic.types import TextBlock
 from sqlmodel import Session, select
 
 from second_brain.config import settings
 from second_brain.db.models import DocumentChunk, IngestedDocument
 from second_brain.db.session import engine
-from second_brain.graphs.state import FailedFile, IngestionState
+from second_brain.graphs.state import FailedFile, IngestionAgentOutput, IngestionState
 from second_brain.services.chunking import Chunk, chunk_document
 from second_brain.services.embeddings import embed_text
 
@@ -86,7 +87,8 @@ async def _generate_contextual_header(
         max_tokens=150,
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.content[0].text.strip()
+    text_block = next(b for b in response.content if isinstance(b, TextBlock))
+    return text_block.text.strip()
 
 
 async def _process_one_chunk(
@@ -142,7 +144,7 @@ async def _do_ingest(filename: str, source_url: str | None = None) -> None:
     filepath.rename(PROCESSED_DIR / filename)
 
 
-async def ingestion_agent_node(state: IngestionState) -> dict:
+async def ingestion_agent_node(state: IngestionState) -> IngestionAgentOutput:
     """LangGraph node: process in_progress, update state on success or failure."""
     if state["in_progress"] is None:
         raise ValueError("ingestion_agent_node called with empty in_progress")
