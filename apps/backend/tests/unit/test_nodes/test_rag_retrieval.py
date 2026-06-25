@@ -173,6 +173,7 @@ async def test_setup_conn_registers_vector_and_jsonb_codec():
         encoder=_json.dumps,
         decoder=_json.loads,
         schema="pg_catalog",
+        format="text",
     )
 
 

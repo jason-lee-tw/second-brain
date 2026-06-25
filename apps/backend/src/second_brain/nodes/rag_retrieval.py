@@ -20,13 +20,14 @@ _rag_pool_lock: asyncio.Lock = asyncio.Lock()
 
 
 async def _setup_conn(conn: asyncpg.Connection) -> None:
-    """Pool init: register pgvector type codec and JSONB auto-decode."""
+    """Register pgvector type codec and JSONB auto-decode on a new pool connection."""
     await register_vector(conn)
     await conn.set_type_codec(
         "jsonb",
         encoder=json.dumps,
         decoder=json.loads,
         schema="pg_catalog",
+        format="text",  # binary JSONB has a leading \x01 version byte; use text
     )
 
 
