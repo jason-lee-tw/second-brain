@@ -23,11 +23,6 @@ def setup_tracing(
             not HTTPS, not grpc://.
             The backend reaches Phoenix via the Docker host port — the two
             services are on isolated networks by design.
-        auto_instrument: Passed as ``True`` — causes ``register()`` to
-            auto-discover and activate all installed
-            ``openinference-instrumentation-*`` packages at startup (e.g.
-            LangChain, LangGraph spans). No separate
-            ``LangChainInstrumentor().instrument()`` call is needed.
 
     Returns:
         The configured ``TracerProvider``, also set as the global provider via
@@ -36,6 +31,9 @@ def setup_tracing(
     return register(
         project_name="second-brain",
         endpoint=phoenix_collection_endpoint,
+        # auto_instrument=True causes register() to auto-discover and activate all
+        # installed openinference-instrumentation-* packages; no separate
+        # LangChainInstrumentor().instrument() call needed.
         auto_instrument=True,
     )
 
