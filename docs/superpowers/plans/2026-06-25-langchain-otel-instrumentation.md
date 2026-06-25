@@ -31,19 +31,25 @@
 
 ---
 
-### Task 1: Update test → red → add package + fix → green
+### Task 1: Fix `setup_tracing()` — TDD red → green → package
 
 **Files:**
 - Modify: `apps/backend/tests/unit/test_observability/test_tracing.py:39-52`
+- Modify: `apps/backend/src/second_brain/observability/tracing.py:31-34`
 - Modify: `apps/backend/pyproject.toml`
-- Modify: `apps/backend/src/second_brain/observability/tracing.py`
 
 **Interfaces:**
 - Produces: `setup_tracing(phoenix_collection_endpoint)` now calls `register(..., auto_instrument=True)`
 
-- [ ] **Step 1: Update the existing test to assert `auto_instrument=True` (makes it red)**
+---
 
-  In `apps/backend/tests/unit/test_observability/test_tracing.py`, update `TestSetupTracing.test_calls_register_with_endpoint_and_default_service_name`:
+#### Red: update the test to assert `auto_instrument=True`
+
+The tests mock `register` — they do NOT need the real package installed. Tests drive the contract; the package add comes after green.
+
+- [ ] **Step 1: Update the failing test**
+
+  In `apps/backend/tests/unit/test_observability/test_tracing.py`, update `TestSetupTracing.test_calls_register_with_endpoint_and_default_service_name` to add `auto_instrument=True` to the expected call:
 
   ```python
   class TestSetupTracing:
@@ -62,69 +68,25 @@
               auto_instrument=True,
           )
           assert result is mock_provider
-
-      def test_auto_instrument_enabled(self):
-          """setup_tracing() passes auto_instrument=True so LangChain spans are emitted."""
-          mock_provider = MagicMock(spec=TracerProvider)
-          with patch(
-              "second_brain.observability.tracing.register",
-              return_value=mock_provider,
-          ) as mock_register:
-              setup_tracing(phoenix_collection_endpoint="http://phoenix:4317")
-
-          _, kwargs = mock_register.call_args
-          assert kwargs.get("auto_instrument") is True
   ```
 
-- [ ] **Step 2: Run test to confirm it is red**
+- [ ] **Step 2: Run the test — confirm RED**
 
   ```bash
-  cd /path/to/ai-learning-milestone
-  just test-unit -k "test_calls_register_with_endpoint_and_default_service_name or test_auto_instrument_enabled"
+  just test-unit -k "test_calls_register_with_endpoint_and_default_service_name"
   ```
 
-  Expected: FAIL — `AssertionError: Expected call: register(project_name='second-brain', endpoint='http://localhost:4317', auto_instrument=True)` (the kwarg is absent).
+  Expected: **FAIL** — `AssertionError: Expected call: register(..., auto_instrument=True)` — the kwarg is absent from the current implementation.
 
-- [ ] **Step 3: Add the package dependency**
+---
 
-  From the workspace root (`ai-learning-milestone/`):
+#### Green: add `auto_instrument=True` to `register()`
 
-  ```bash
-  uv add openinference-instrumentation-langchain --project apps/backend
-  ```
+- [ ] **Step 3: Add `auto_instrument=True` to `setup_tracing()`**
 
-  This updates `apps/backend/pyproject.toml` and `uv.lock`. Verify the line appears:
-
-  ```bash
-  grep "openinference" apps/backend/pyproject.toml
-  ```
-
-  Expected output: `"openinference-instrumentation-langchain>=..."`
-
-- [ ] **Step 4: Enable `auto_instrument=True` in `setup_tracing()`**
-
-  Edit `apps/backend/src/second_brain/observability/tracing.py`, function `setup_tracing()`, change the `register()` call:
+  Edit `apps/backend/src/second_brain/observability/tracing.py`. Change only the `register()` call at the end of `setup_tracing()`:
 
   ```python
-  def setup_tracing(
-      phoenix_collection_endpoint: str,
-  ) -> TracerProvider:
-      """Configure the global OTEL TracerProvider with Phoenix as the trace backend.
-
-      Call once at app startup (inside the FastAPI lifespan).
-
-      Args:
-          phoenix_collection_endpoint: OTLP/gRPC collector URL, e.g.
-              ``http://host.docker.internal:4317``.
-              arize-phoenix-otel register() accepts http:// for plaintext gRPC —
-              not HTTPS, not grpc://.
-              The backend reaches Phoenix via the Docker host port — the two
-              services are on isolated networks by design.
-
-      Returns:
-          The configured ``TracerProvider``, also set as the global provider via
-          ``opentelemetry.trace.set_tracer_provider()``.
-      """
       return register(
           project_name="second-brain",
           endpoint=phoenix_collection_endpoint,
@@ -132,15 +94,49 @@
       )
   ```
 
-- [ ] **Step 5: Run tests to confirm green**
+- [ ] **Step 4: Run the full test suite — confirm GREEN**
 
   ```bash
   just test-unit
   ```
 
-  Expected: all tests PASS including the two `TestSetupTracing` tests.
+  Expected: **all PASS** — `TestSetupTracing::test_calls_register_with_endpoint_and_default_service_name` now passes; no other tests broken.
 
-- [ ] **Step 6: Run lint and type-check**
+---
+
+#### Add package (runtime concern — after green)
+
+The package is needed so `auto_instrument=True` actually finds and activates the LangChain instrumentor at runtime. Tests already pass without it (they mock `register`).
+
+- [ ] **Step 5: Add the runtime dependency**
+
+  From the workspace root (`ai-learning-milestone/`):
+
+  ```bash
+  uv add openinference-instrumentation-langchain --project apps/backend
+  ```
+
+  Verify it appears in `apps/backend/pyproject.toml`:
+
+  ```bash
+  grep "openinference" apps/backend/pyproject.toml
+  ```
+
+  Expected: `"openinference-instrumentation-langchain>=..."`
+
+- [ ] **Step 6: Run full suite again — confirm still GREEN**
+
+  ```bash
+  just test-unit
+  ```
+
+  Expected: all PASS — adding the package must not break any test.
+
+---
+
+#### Gate and commit
+
+- [ ] **Step 7: Lint and type-check**
 
   ```bash
   just lint && just type-check
@@ -148,7 +144,7 @@
 
   Expected: no errors, no warnings.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
   ```bash
   git add apps/backend/pyproject.toml uv.lock \
