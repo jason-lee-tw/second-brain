@@ -31,6 +31,7 @@ def setup_tracing(
     return register(
         project_name="second-brain",
         endpoint=phoenix_collection_endpoint,
+        auto_instrument=True,
     )
 
 

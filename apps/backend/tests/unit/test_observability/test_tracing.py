@@ -48,6 +48,7 @@ class TestSetupTracing:
         mock_register.assert_called_once_with(
             project_name="second-brain",
             endpoint="http://localhost:4317",
+            auto_instrument=True,
         )
         assert result is mock_provider
 
