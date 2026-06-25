@@ -1812,6 +1812,23 @@ wheels = [
 ]
 
 [[package]]
+name = "openinference-instrumentation-langchain"
+version = "0.1.66"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "openinference-instrumentation" },
+    { name = "openinference-semantic-conventions" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-semantic-conventions" },
+    { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7b/ac/8f67854dd90a4ab717f4377a3f6b01753cc2873c5ce1cc04f4c294606808/openinference_instrumentation_langchain-0.1.66.tar.gz", hash = "sha256:2f567b0b099f2e96de3ddd32696d3afd14cea2bb7af4c19f8b72a6c5fd2af576", size = 75639, upload-time = "2026-05-18T18:51:35.713Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d8/cf/0e4cc81ae8d9b504aa7f2942565a86d185f4c6c7206ad1e30bf4ac643274/openinference_instrumentation_langchain-0.1.66-py3-none-any.whl", hash = "sha256:f10c9bda4d2877583c35d5d55e3ca22de78917a1cdbe2cfe4da75312ea51840f", size = 24840, upload-time = "2026-05-18T18:51:34.384Z" },
+]
+
+[[package]]
 name = "openinference-semantic-conventions"
 version = "0.1.30"
 source = { registry = "https://pypi.org/simple" }
@@ -3083,6 +3100,7 @@ dependencies = [
     { name = "langchain-anthropic" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
+    { name = "openinference-instrumentation-langchain" },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "opentelemetry-sdk" },
@@ -3121,6 +3139,7 @@ requires-dist = [
     { name = "langchain-anthropic", specifier = ">=0.3.0,<1.0" },
     { name = "langgraph", specifier = ">=0.2.0,<1.0" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0.0" },
+    { name = "openinference-instrumentation-langchain", specifier = ">=0.1.66" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.29" },
     { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.50b0" },
     { name = "opentelemetry-sdk", specifier = ">=1.29" },

@@ -7,7 +7,7 @@
 | Agent orchestration  | LangGraph                                                                          |
 | Database             | PostgreSQL 16 + pgvector                                                           |
 | ORM + migrations     | SQLModel + Alembic                                                                 |
-| Observability        | Arize Phoenix (OTEL) — UI at `localhost:6006`                                      |
+| Observability        | Arize Phoenix (OTEL) — UI at `localhost:6006`; `openinference-instrumentation-langchain` for LangChain/LangGraph spans |
 | Embedding model      | `qwen3-embedding:0.6b` via Ollama (`localhost:11434`, dim=1024)                    |
 | LLM — lightweight    | `claude-haiku-4-5` (routing, web research, memory extraction)                      |
 | LLM — synthesis/eval | `claude-sonnet-4-6` (final answers + LLM-as-judge evals)                           |

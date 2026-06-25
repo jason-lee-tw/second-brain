@@ -31,6 +31,10 @@ def setup_tracing(
     return register(
         project_name="second-brain",
         endpoint=phoenix_collection_endpoint,
+        # auto_instrument=True causes register() to auto-discover and activate all
+        # installed openinference-instrumentation-* packages; no separate
+        # LangChainInstrumentor().instrument() call needed.
+        auto_instrument=True,
     )
 
 
