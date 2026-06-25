@@ -4,6 +4,7 @@
 # PostgresSaver requires psycopg3 (psycopg_pool); these two drivers can't share a pool
 
 import asyncio
+import json
 
 import asyncpg
 import httpx
@@ -18,12 +19,23 @@ _rag_pool: asyncpg.Pool | None = None
 _rag_pool_lock: asyncio.Lock = asyncio.Lock()
 
 
+async def _setup_conn(conn: asyncpg.Connection) -> None:
+    """Pool init: register pgvector type codec and JSONB auto-decode."""
+    await register_vector(conn)
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+
+
 async def _get_rag_pool(postgres_url: str) -> asyncpg.Pool:
     """Return the module-level connection pool, initialising it on first call."""
     global _rag_pool
     async with _rag_pool_lock:
         if _rag_pool is None:
-            _rag_pool = await asyncpg.create_pool(postgres_url, init=register_vector)
+            _rag_pool = await asyncpg.create_pool(postgres_url, init=_setup_conn)
     return _rag_pool
 
 

@@ -1,5 +1,6 @@
 """Unit tests for the RAG retrieval node."""
 
+import json as _json  # alias used in JSONB codec tests
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -150,6 +151,49 @@ async def test_shutdown_rag_pool_closes_and_resets():
 
     mock_pool.close.assert_awaited_once()
     assert rag_retrieval._rag_pool is None
+
+
+@pytest.mark.asyncio
+async def test_setup_conn_registers_vector_and_jsonb_codec():
+    """_setup_conn must call register_vector AND set_type_codec for jsonb."""
+    from second_brain.nodes.rag_retrieval import _setup_conn
+
+    mock_conn = AsyncMock()
+    mock_conn.set_type_codec = AsyncMock()
+
+    with patch(
+        "second_brain.nodes.rag_retrieval.register_vector",
+        new=AsyncMock(),
+    ) as mock_rv:
+        await _setup_conn(mock_conn)
+
+    mock_rv.assert_awaited_once_with(mock_conn)
+    mock_conn.set_type_codec.assert_awaited_once_with(
+        "jsonb",
+        encoder=_json.dumps,
+        decoder=_json.loads,
+        schema="pg_catalog",
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_rag_pool_passes_setup_conn_as_init():
+    """asyncpg.create_pool must receive init=_setup_conn for JSONB auto-decoding."""
+    from second_brain.nodes.rag_retrieval import _get_rag_pool, _setup_conn
+
+    rag_retrieval._rag_pool = None
+    mock_pool = AsyncMock()
+
+    with patch(
+        "second_brain.nodes.rag_retrieval.asyncpg.create_pool",
+        new=AsyncMock(return_value=mock_pool),
+    ) as mock_create:
+        await _get_rag_pool("postgresql://test/db")
+
+    mock_create.assert_awaited_once_with("postgresql://test/db", init=_setup_conn)
+
+    # Clean up module-level state
+    rag_retrieval._rag_pool = None
 
 
 @pytest.mark.asyncio
