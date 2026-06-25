@@ -66,3 +66,53 @@ pool = AsyncConnectionPool(conninfo=postgres_url, open=False, kwargs={"autocommi
 ```
 
 See fix plan: `docs/superpowers/plans/2026-06-24-fix-query-graph-autocommit.md`
+
+---
+
+## Follow-up Bug: asyncpg JSONB returned as string
+
+**Date:** 2026-06-25  
+**Discovered:** After autocommit fix was applied; `POST /query` still returns 500.
+
+### Symptom
+
+```
+ValueError: dictionary update sequence element #0 has length 1; 2 is required
+  File "second_brain/nodes/rag_retrieval.py", line 40, in _row_to_chunk_metadata
+    d: dict[str, object] = dict(row_meta)
+```
+
+### Five-Why Root Cause
+
+| Why | Finding |
+| --- | ------- |
+| Why does `dict(row_meta)` crash? | `row_meta` is a JSON string; `dict()` on a string iterates characters (length 1 each), not key-value pairs |
+| Why is the JSONB column a string? | `asyncpg` does not auto-decode JSONB to Python dicts — it returns raw JSON text by design |
+| Why was `dict(row_meta)` written here? | Author assumed asyncpg and psycopg3 behave the same for JSONB; they don't — psycopg3 auto-decodes, asyncpg does not |
+| Why was the driver difference not caught? | CLAUDE.md documents the split pools but the JSONB decoding difference between the two drivers wasn't accounted for in `_row_to_chunk_metadata` |
+| Why does asyncpg return JSONB as string? | By design: asyncpg defers JSON parsing for performance; auto-decoding requires explicit codec registration via `conn.set_type_codec('jsonb', ...)` |
+
+### Root Cause
+
+`rag_retrieval.py:26` creates `asyncpg.Pool` with only `init=register_vector`. No JSONB codec is registered, so asyncpg returns the `metadata` JSONB column as a raw string. `_row_to_chunk_metadata` then calls `dict(row_meta)` expecting a dict, which fails on a string.
+
+### Fix (chosen: Option B — pool-level codec registration)
+
+Register a JSONB codec in `_get_rag_pool` so all asyncpg queries auto-decode JSONB:
+
+```python
+import json
+
+async def _setup_conn(conn: asyncpg.Connection) -> None:
+    await register_vector(conn)
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+
+_rag_pool = await asyncpg.create_pool(postgres_url, init=_setup_conn)
+```
+
+See fix plan: `docs/superpowers/plans/2026-06-25-fix-asyncpg-jsonb-codec.md`
