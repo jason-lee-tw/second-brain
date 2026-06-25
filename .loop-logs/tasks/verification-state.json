@@ -1,5 +1,1 @@
-{
-  "rounds_completed": 1,
-  "last_outcome": "pass",
-  "notes": "All 6 ACs passed (JSONB codec fix). POST /query returns 200, no ValueError in logs, response contains all required fields. Container rebuilt via just up-all before runtime checks."
-}
+{ "rounds_completed": 2, "last_outcome": "pass", "notes": "Round 1 failed: Docker image not rebuilt. Round 2 passed after docker compose build backend — all 3 ACs green. LLM/CHAIN spans confirmed in Phoenix second-brain project." }
