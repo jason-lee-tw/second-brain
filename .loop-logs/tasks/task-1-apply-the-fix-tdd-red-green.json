@@ -1,0 +1,9 @@
+{
+  "task_id": "task-1-apply-the-fix-tdd-red-green",
+  "plan": "docs/superpowers/plans/2026-06-24-fix-query-graph-autocommit.md",
+  "spec": "docs/superpowers/specs/2026-06-24-query-graph-autocommit-fix.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": null,
+  "completed_steps": ["tdd-loop-complete"]
+}

@@ -1,0 +1,9 @@
+{
+  "task_id": "task-1-register-jsonb-codec-in-asyncpg-pool-tdd",
+  "plan": "docs/superpowers/plans/2026-06-25-fix-asyncpg-jsonb-codec.md",
+  "spec": "docs/bugs/002-query-graph-autocommit.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-1-register-jsonb-codec-in-asyncpg-pool-tdd",
+  "completed_steps": ["tdd-loop-complete"]
+}

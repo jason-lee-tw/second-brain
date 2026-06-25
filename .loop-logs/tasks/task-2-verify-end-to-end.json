@@ -1,0 +1,9 @@
+{
+  "task_id": "task-2-verify-end-to-end",
+  "plan": "docs/superpowers/plans/2026-06-24-fix-query-graph-autocommit.md",
+  "spec": "docs/superpowers/specs/2026-06-24-query-graph-autocommit-fix.md",
+  "status": "pending",
+  "attempt": 0,
+  "worktree": null,
+  "completed_steps": []
+}
