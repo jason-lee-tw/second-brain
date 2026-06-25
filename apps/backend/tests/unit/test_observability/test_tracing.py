@@ -36,8 +36,8 @@ def in_memory_tracer():
 
 
 class TestSetupTracing:
-    def test_calls_register_with_endpoint_and_default_service_name(self):
-        """setup_tracing() delegates to phoenix.otel.register with the endpoint."""
+    def test_calls_register_with_correct_args(self):
+        """setup_tracing() calls register with endpoint and auto_instrument=True."""
         mock_provider = MagicMock(spec=TracerProvider)
         with patch(
             "second_brain.observability.tracing.register",
