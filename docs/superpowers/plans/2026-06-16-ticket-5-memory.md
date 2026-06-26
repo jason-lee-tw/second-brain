@@ -575,6 +575,7 @@ Overwrite `apps/backend/src/second_brain/nodes/memory_retrieval.py`:
 """MemoryRetrievalNode: dual-table cosine search on learned_facts + model_corrections."""
 import asyncio
 
+import asyncpg
 from langchain_core.messages import HumanMessage
 
 from second_brain.db.pool import get_pgvector_pool
@@ -583,11 +584,13 @@ from second_brain.services.embeddings import embed_text
 from second_brain.utils import get_str_content
 
 
-async def _search_facts(pool, embedding: list[float]) -> list[tuple[float, MemoryItem]]:
+async def _search_facts(pool: asyncpg.Pool, embedding: list[float]) -> list[tuple[float, MemoryItem]]:
     async with pool.acquire() as conn:
         rows = await conn.fetch(
+            # ORDER BY raw <=> operator (distance ASC) so pgvector HNSW/IVFFlat index is used.
+            # Same pattern as rag_retrieval.py. Score computed as 1-distance in SELECT only.
             "SELECT id::text, fact, confidence, 1-(embedding<=>$1) AS score"
-            " FROM learned_facts ORDER BY score DESC LIMIT 5",
+            " FROM learned_facts ORDER BY embedding<=>$1 ASC LIMIT 5",
             embedding,
         )
         return [
@@ -599,11 +602,11 @@ async def _search_facts(pool, embedding: list[float]) -> list[tuple[float, Memor
         ]
 
 
-async def _search_corrections(pool, embedding: list[float]) -> list[tuple[float, MemoryItem]]:
+async def _search_corrections(pool: asyncpg.Pool, embedding: list[float]) -> list[tuple[float, MemoryItem]]:
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id::text, correction AS fact, 1-(embedding<=>$1) AS score"
-            " FROM model_corrections ORDER BY score DESC LIMIT 3",
+            " FROM model_corrections ORDER BY embedding<=>$1 ASC LIMIT 3",
             embedding,
         )
         return [
@@ -867,7 +870,7 @@ Expected: `ModuleNotFoundError: No module named 'second_brain.nodes.memory_agent
 from __future__ import annotations
 
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from second_brain.graphs.state import (
     ConflictContext,
@@ -884,14 +887,14 @@ _llm = ChatAnthropic(model="claude-haiku-4-5").with_structured_output(  # pyrigh
 )
 
 
-def _last_human_msg(messages: list) -> HumanMessage | None:
+def _last_human_msg(messages: list[BaseMessage]) -> HumanMessage | None:
     for msg in reversed(messages):
         if isinstance(msg, HumanMessage):
             return msg
     return None
 
 
-def _prior_ai_content(messages: list) -> str:
+def _prior_ai_content(messages: list[BaseMessage]) -> str:
     last_human_idx: int | None = None
     for i in range(len(messages) - 1, -1, -1):
         if isinstance(messages[i], HumanMessage):
@@ -1236,21 +1239,37 @@ _MAX_RETRIES = 3
 
 
 async def _conflict_check(embedding: list[float]) -> list[dict]:
-    """Return rows from learned_facts whose cosine similarity exceeds threshold."""
+    """Return rows from learned_facts whose cosine similarity exceeds threshold.
+
+    Uses distance domain (embedding<=>$1 < 1-threshold) so pgvector index is used.
+    """
     pool = await get_pgvector_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id::text, fact, 1-(embedding<=>$1) AS score"
             " FROM learned_facts"
-            " WHERE 1-(embedding<=>$1) > $2"
-            " ORDER BY score DESC LIMIT 5",
+            " WHERE (embedding<=>$1) < (1 - $2)"  # distance domain → pgvector index
+            " ORDER BY embedding<=>$1 ASC LIMIT 5",
             embedding,
             settings.memory_conflict_threshold,
         )
         return [dict(r) for r in rows]
 
 
+def _retry_write(fn, *args) -> None:
+    """Run a sync write function with up to _MAX_RETRIES attempts, then raise."""
+    for attempt in range(_MAX_RETRIES):
+        try:
+            fn(*args)
+            return
+        except Exception:
+            if attempt == _MAX_RETRIES - 1:
+                raise
+
+
 def _write_fact(fact_update: FactUpdate, session_id: str, embedding: list[float]) -> None:
+    # Called directly (not via asyncio.to_thread): 1–3 inserts per turn, ~1-3 ms each.
+    # Event-loop block is acceptable per D2. Wrap in asyncio.to_thread if insert count grows.
     with Session(engine) as session:
         session.add(LearnedFact(
             id=uuid.uuid4(),
@@ -1263,6 +1282,7 @@ def _write_fact(fact_update: FactUpdate, session_id: str, embedding: list[float]
 
 
 def _write_correction(correction: CorrectionUpdate, session_id: str, embedding: list[float]) -> None:
+    # Same sync pattern as _write_fact — see comment above re: asyncio.to_thread.
     with Session(engine) as session:
         session.add(ModelCorrection(
             id=uuid.uuid4(),
@@ -1276,23 +1296,12 @@ def _write_correction(correction: CorrectionUpdate, session_id: str, embedding: 
 
 
 async def _persist_fact(fact_update: FactUpdate, session_id: str) -> ConflictContext | None:
-    """
-    Attempts to persist one fact update.
-    Returns ConflictContext if conflict detected (fact not written).
-    Returns None on successful write.
-    Raises after _MAX_RETRIES failed write attempts.
-    """
+    """Persist one fact. Returns ConflictContext on conflict, None on success, raises on write exhaustion."""
     embedding = await embed_text(fact_update["fact"])
 
     # User already resolved conflict — write directly, skip conflict check
     if fact_update.get("conflicts_with"):
-        for attempt in range(_MAX_RETRIES):
-            try:
-                _write_fact(fact_update, session_id, embedding)
-                return None
-            except Exception:
-                if attempt == _MAX_RETRIES - 1:
-                    raise
+        _retry_write(_write_fact, fact_update, session_id, embedding)
         return None
 
     conflicts = await _conflict_check(embedding)
@@ -1303,13 +1312,7 @@ async def _persist_fact(fact_update: FactUpdate, session_id: str) -> ConflictCon
             new=fact_update["fact"],
         )
 
-    for attempt in range(_MAX_RETRIES):
-        try:
-            _write_fact(fact_update, session_id, embedding)
-            return None
-        except Exception:
-            if attempt == _MAX_RETRIES - 1:
-                raise
+    _retry_write(_write_fact, fact_update, session_id, embedding)
     return None
 
 
@@ -1336,13 +1339,7 @@ async def memory_persistence_node(state: SecondBrainState) -> dict[str, Any]:
 
     for correction in correction_updates:
         embedding = await embed_text(correction["correction"])  # encode correction, not original_answer
-        for attempt in range(_MAX_RETRIES):
-            try:
-                _write_correction(correction, session_id, embedding)
-                break
-            except Exception:
-                if attempt == _MAX_RETRIES - 1:
-                    raise
+        _retry_write(_write_correction, correction, session_id, embedding)
 
     result: dict[str, Any] = {
         "awaiting_conflict_clarification": bool(conflict_contexts),
@@ -1518,11 +1515,18 @@ cd apps/backend && python -m pytest tests/unit/ -v
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Verify working tree is clean after staging**
 
 ```bash
-git add apps/backend/src/second_brain/nodes/synthesis.py \
+git add apps/backend/src/second_brain/graphs/state.py \
+        apps/backend/src/second_brain/nodes/synthesis.py \
         apps/backend/tests/unit/test_nodes/test_synthesis_awaiting.py
+git status  # must show nothing unstaged
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
 git commit -m "feat(memory): synthesis sets awaiting_correction=True when confidence < 0.7"
 ```
 
@@ -1769,32 +1773,8 @@ async def test_ac2_conflict_detected_not_written(db_engine):
     assert count == 0
 
 
-@pytest.mark.asyncio
-async def test_ac3_unrelated_query_resets_awaiting_correction():
-    """AC-3: awaiting_correction=True + unrelated new query → awaiting_correction=False."""
-    from unittest.mock import AsyncMock, patch
-    from langchain_core.messages import AIMessage, HumanMessage
-    from second_brain.nodes.memory_agent import memory_agent_node
-    from second_brain.graphs.state import MemoryAgentOutput, MemoryCase
-
-    state = _make_state(
-        messages=[
-            AIMessage(content="I think the speed of light is 100 km/s, but I'm not sure."),
-            HumanMessage(content="What day is it today?"),
-        ],
-        awaiting_correction=True,
-    )
-
-    with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
-        mock_llm.ainvoke = AsyncMock(return_value=MemoryAgentOutput(
-            case=MemoryCase.FACT_EXTRACTION,
-            fact_updates=[],
-            correction_updates=[],
-        ))
-        result = await memory_agent_node(state)
-
-    assert result["awaiting_correction"] is False
-    assert result["correction_updates"] == []
+# AC-3 (awaiting_correction reset) is covered by a unit test that does not require a real DB.
+# See: tests/unit/test_nodes/test_memory_agent.py::test_case2_unrelated_query_resets_awaiting_correction
 
 
 @pytest.mark.asyncio
@@ -1862,13 +1842,13 @@ just up-all  # start Docker stack and Ollama
 cd apps/backend && python -m pytest tests/integration/test_memory_system.py -v -m integration
 ```
 
-Expected: `5 passed`
+Expected: `4 passed` (AC-1, AC-2, AC-4, full loop — AC-3 is a unit test in `test_memory_agent.py`)
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add apps/backend/tests/integration/test_memory_system.py
-git commit -m "test(memory): integration tests covering AC-1 through AC-4 + full memory loop"
+git commit -m "test(memory): integration tests covering AC-1, AC-2, AC-4 + full memory loop"
 ```
 
 ---
@@ -1896,6 +1876,7 @@ git commit -m "test(memory): integration tests covering AC-1 through AC-4 + full
 | D11: walk messages by type (no fixed indices)                             | Tasks 3, 4                                |
 | D12: Ollama unavailability in `memory_retrieval_node` fails hard          | Task 3                                    |
 | D13: `embed_text()` from `services/embeddings` (no new utility)           | Tasks 3, 5                                |
+| D15: LangChain-Anthropic scope — new memory nodes only; `ingestion_agent` unchanged | Task 4              |
 | D16: integration test with real DB                                        | Task 8                                    |
 | Graph wiring: `redact_outbound → memory_agent → memory_persistence → END` | Task 7                                    |
 

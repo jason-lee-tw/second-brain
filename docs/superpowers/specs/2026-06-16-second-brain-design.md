@@ -38,6 +38,8 @@ A personal knowledge management system ("Second Brain") that ingests content fro
 
 > **Breaking change (Ticket 5):** `conflictContext` changes from `list[str]` to `list[ConflictContext]` — each item is `{"existing": "...", "existing_id": "uuid", "new": "..."}`.
 
+**State→API field mapping:** `isUncertain` serializes `is_uncertain`; `conflictDetected` serializes `awaiting_conflict_clarification`; `conflictContext` serializes `conflict_context`.
+
 `sessionId` is `null` for a new conversation; a UUID7 continues an existing session. The `sessionId` is the LangGraph `threadId` and the chat history key.
 
 ### `/ingest/file` response
@@ -244,11 +246,13 @@ class SecondBrainState(TypedDict):
     final_answer: str
     confidence: float
     is_uncertain: bool
-    awaiting_correction: bool                # persisted across turns via LangGraph checkpointing
-    awaiting_conflict_clarification: bool
-    conflict_context: list[ConflictContext]  # BREAKING CHANGE: was list[str]
-    fact_updates: list[FactUpdate]
-    correction_updates: list[CorrectionUpdate]
+    # All five fields below are NotRequired for backward compatibility with existing
+    # state initialization code. They must be initialised before the memory nodes run.
+    awaiting_correction: NotRequired[bool]                # persisted across turns via LangGraph checkpointing
+    awaiting_conflict_clarification: NotRequired[bool]
+    conflict_context: NotRequired[list[ConflictContext]]  # BREAKING CHANGE: was list[str]
+    fact_updates: NotRequired[list[FactUpdate]]
+    correction_updates: NotRequired[list[CorrectionUpdate]]
 ```
 
 ---
@@ -361,7 +365,7 @@ This significantly reduces retrieval failure rate (Anthropic research: 49–67% 
 ### Learned Facts
 
 - Auto-extracted from every user message when the user refers to themselves
-- Embedded via Ollama before storing (enables semantic retrieval)
+- Embedded via `embed_text()` from `second_brain.services.embeddings` before storing — do NOT create a new embedding utility
 - Before storing: check for conflicts via cosine similarity against existing facts (`settings.memory_conflict_threshold`, default 0.85)
   - If conflict detected: populate `ConflictContext` objects, set `awaiting_conflict_clarification=True`, surface conflict in response, wait for user clarification
   - After clarification: Memory Agent classifies as `CONFLICT_RESOLUTION`; `MemoryPersistenceNode` deletes conflicting IDs and writes resolved fact
@@ -520,3 +524,11 @@ Offline / on-demand via a script. Not part of CI.
 | AC-8  | A file already present in `ingested_documents` (matching content hash) is skipped on re-ingestion                                                                                |
 | AC-9  | RAGAS `context_recall` and `answer_faithfulness` for the full RAG pipeline are measurably higher than the no-RAG baseline on the curated eval dataset                            |
 | AC-10 | `/query` with a new `sessionId=null` creates a new LangGraph thread; subsequent requests with the returned UUID7 continue the same thread                                        |
+
+---
+
+## 13. New Ticket Required (Out of Scope for Ticket 5)
+
+**Unify embedding utility (D14)**
+
+`services/embeddings.embed_text()` is the canonical embedding helper. `rag_retrieval.py` still contains a duplicate `_embed_query()` inline that bypasses `settings` and creates a per-call `httpx.AsyncClient`. A future ticket will replace `_embed_query()` with `embed_text()` from `services/embeddings`. Plan that ticket before implementation.
