@@ -6,12 +6,11 @@ Searches learned_facts + model_corrections tables.
 import asyncio
 
 import asyncpg
-from langchain_core.messages import HumanMessage
 
 from second_brain.db.pool import get_pgvector_pool
 from second_brain.graphs.state import MemoryItem, RetrieveMemoryOutput, SecondBrainState
 from second_brain.services.embeddings import embed_text
-from second_brain.utils import get_str_content
+from second_brain.utils import get_str_content, last_human_message
 
 
 async def _search_facts(
@@ -65,11 +64,7 @@ async def memory_retrieval_node(state: SecondBrainState) -> RetrieveMemoryOutput
 
     Fails hard on Ollama unavailability — no empty-list fallback.
     """
-    last_human: HumanMessage | None = None
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, HumanMessage):
-            last_human = msg
-            break
+    last_human = last_human_message(state["messages"])
     if last_human is None:
         return {"retrieved_memory": []}
 

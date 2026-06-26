@@ -95,7 +95,7 @@ async def test_ac1_skips_conflict_check_when_conflicts_with_set():
             {
                 "fact": "User lives in Tokyo",
                 "confidence": 0.95,
-                "conflicts_with": ["old-id"],
+                "conflicts_with": ["00000000-0000-0000-0000-000000000001"],
             }
         ],
     )

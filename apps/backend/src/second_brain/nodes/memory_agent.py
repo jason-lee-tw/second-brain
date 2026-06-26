@@ -10,18 +10,11 @@ from second_brain.graphs.state import (
     MemoryAgentOutput,
     SecondBrainState,
 )
-from second_brain.utils import get_str_content
+from second_brain.utils import get_str_content, last_human_message
 
 _llm = ChatAnthropic(model="claude-haiku-4-5").with_structured_output(  # pyright: ignore[reportCallIssue]
     MemoryAgentOutput
 )
-
-
-def _last_human_msg(messages: list[BaseMessage]) -> HumanMessage | None:
-    for msg in reversed(messages):
-        if isinstance(msg, HumanMessage):
-            return msg
-    return None
 
 
 def _prior_ai_content(messages: list[BaseMessage]) -> str:
@@ -45,15 +38,17 @@ async def memory_agent_node(state: SecondBrainState) -> dict[str, object]:
     awaiting_conflict: bool = state.get("awaiting_conflict_clarification", False)  # type: ignore[union-attr]
     conflict_context: list[ConflictContext] = state.get("conflict_context", [])  # type: ignore[union-attr]
 
-    human_msg = _last_human_msg(messages)
+    human_msg = last_human_message(messages)
     if human_msg is None:
         return {"fact_updates": [], "correction_updates": []}
     user_text = get_str_content(human_msg)
 
     if awaiting_conflict:
-        # Case 3: conflict clarification
+        # Case 3: conflict clarification — pass existing_ids so LLM can populate
+        # conflicts_with; persistence uses that to delete replaced facts (F1 fix)
         conflict_summary = "\n".join(
-            f'- Existing: "{c["existing"]}" | New: "{c["new"]}"'
+            f'- existing_id={c["existing_id"]} | Existing: "{c["existing"]}"'
+            f' | New: "{c["new"]}"'
             for c in conflict_context
         )
         prompt = (
@@ -61,7 +56,10 @@ async def memory_agent_node(state: SecondBrainState) -> dict[str, object]:
             f"Conflicts:\n{conflict_summary}\n\n"
             f"User clarification: {user_text!r}\n\n"
             "case=conflict_resolution. Populate fact_updates with the resolved "
-            "fact(s). Set conflicts_with=[] — persistence node handles deletion."
+            "fact(s). Set conflicts_with to the existing_id(s) of the facts being "
+            "replaced — this triggers deletion of the old facts before writing "
+            "the new one. If the user chose to keep the existing fact, return "
+            "empty fact_updates."
         )
     elif awaiting_correction:
         # Case 2: correction check
