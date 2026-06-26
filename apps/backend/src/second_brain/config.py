@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     ingestion_model: str = "claude-haiku-4-5"
     embedding_model: str = "qwen3-embedding:0.6b"
 
+    # Memory behaviour
+    memory_conflict_threshold: float = 0.85  # env: MEMORY_CONFLICT_THRESHOLD
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
