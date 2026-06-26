@@ -37,4 +37,4 @@ def test_memory_agent_output_with_facts():
 def test_memory_conflict_threshold_default():
     from second_brain.config import settings
 
-    assert settings.memory_conflict_threshold == 0.85
+    assert settings.memory_conflict_threshold == 0.95
