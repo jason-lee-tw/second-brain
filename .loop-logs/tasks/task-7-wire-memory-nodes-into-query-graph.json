@@ -1,0 +1,9 @@
+{
+  "task_id": "task-7-wire-memory-nodes-into-query-graph",
+  "plan": "docs/superpowers/plans/2026-06-16-ticket-5-memory.md",
+  "spec": "docs/superpowers/specs/2026-06-16-second-brain-design.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-7-wire-memory-nodes-into-query-graph",
+  "completed_steps": ["tdd-loop-complete"]
+}

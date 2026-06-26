@@ -1,0 +1,5 @@
+{
+  "rounds_completed": 6,
+  "last_outcome": "pass",
+  "notes": "AC-1..AC-4 all PASS. Fixes required: dropped FK constraint on source_session (migration 002), updated conflictContext schema to list[ConflictContextItem], moved awaiting_correction to memory_persistence_node for cross-turn detection, raised conflict threshold to 0.95 for qwen3-embedding:0.6b, improved Case 2 prompt to avoid false corrections on unrelated queries."
+}
