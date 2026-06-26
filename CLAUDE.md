@@ -44,11 +44,11 @@ TDD is expected: new code ships with tests for the happy path and 2+ edge cases 
 
 ## Critical Rules
 
-- Do NOT commit directly to `main`, ALWAYS create a branch follow format `<category>/<ticket_number_or_000>-<description>`
+- NEVER commit directly to `main`, ALWAYS create a branch follow format in [branch-name-rule.md](./.claude/rules/branch-name-rule.md)
 - Do NOT suppress errors with broad excepts — fix the root cause
   (exception: teardown paths may catch-and-log broad exceptions with
   exc_info=True when the exception is unactionable at exit time)
-- Do NOT install dependencies without flagging it first (use `uv add`, never edit lockfiles by hand)
+- Do NOT install dependencies without flagging it first (use `uv add`, NEVER edit lockfiles by hand)
 - Commits MUST follow Conventional Commits (enforced by `.hooks/commit-msg`)
 
 ## Done Means
@@ -73,3 +73,9 @@ runtime behavior can't be observed, say so and name the blocker — never assume
 
 When compacting, preserve: modified file list, failing test/lint output, the current
 plan, and any decisions made explicitly this session.
+
+## Handoff document
+
+When handing job to next agent (non subagent), ALWAYS write the detailed context into a handoff file. So the next agent can get enough context from the handoff file.
+
+Store the hand-off file into [Claude temp folder](./.claude/temp/)
