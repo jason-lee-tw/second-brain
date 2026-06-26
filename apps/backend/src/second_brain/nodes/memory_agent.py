@@ -69,10 +69,18 @@ async def memory_agent_node(state: SecondBrainState) -> dict[str, object]:
         prompt = (
             f"The AI gave an uncertain answer: {prior_ai!r}\n"
             f"The user responded: {user_text!r}\n\n"
-            "If the user is correcting the AI: case=correction, populate "
-            "correction_updates (original_answer, correction, root_cause). "
-            "If the user is asking something new: case=fact_extraction, extract "
-            "any self-referential facts into fact_updates."
+            "Decide: is the user explicitly correcting the AI's answer on the "
+            "SAME topic, or are they asking a completely different question?\n\n"
+            "CORRECTION (case=correction): user directly contradicts or fixes the "
+            "AI's answer on the same topic (e.g. 'Actually it is X', 'You are "
+            "wrong, the answer is Y'). Populate correction_updates with "
+            "original_answer, correction, root_cause.\n\n"
+            "NOT a correction (case=fact_extraction): user asks about a "
+            "completely different topic, ignores the prior answer, or asks a "
+            "question unrelated to what the AI was uncertain about. In this case "
+            "extract any self-referential facts into fact_updates (or leave "
+            "empty).\n\n"
+            "If in doubt, prefer case=fact_extraction over case=correction."
         )
     else:
         # Case 1: normal fact extraction
