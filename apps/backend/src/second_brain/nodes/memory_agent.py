@@ -1,0 +1,103 @@
+"""MemoryAgentNode: classifies user message into one of three MemoryCase values."""
+
+from __future__ import annotations
+
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+
+from second_brain.graphs.state import (
+    ConflictContext,
+    MemoryAgentOutput,
+    SecondBrainState,
+)
+from second_brain.utils import get_str_content
+
+_llm = ChatAnthropic(model="claude-haiku-4-5").with_structured_output(  # pyright: ignore[reportCallIssue]
+    MemoryAgentOutput
+)
+
+
+def _last_human_msg(messages: list[BaseMessage]) -> HumanMessage | None:
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            return msg
+    return None
+
+
+def _prior_ai_content(messages: list[BaseMessage]) -> str:
+    last_human_idx: int | None = None
+    for i in range(len(messages) - 1, -1, -1):
+        if isinstance(messages[i], HumanMessage):
+            last_human_idx = i
+            break
+    if last_human_idx is None or last_human_idx == 0:
+        return ""
+    for i in range(last_human_idx - 1, -1, -1):
+        if isinstance(messages[i], AIMessage):
+            return get_str_content(messages[i])
+    return ""
+
+
+async def memory_agent_node(state: SecondBrainState) -> dict[str, object]:
+    """Three-case memory classification via LangChain-Anthropic structured output."""
+    messages = state["messages"]
+    awaiting_correction: bool = state.get("awaiting_correction", False)  # type: ignore[union-attr]
+    awaiting_conflict: bool = state.get("awaiting_conflict_clarification", False)  # type: ignore[union-attr]
+    conflict_context: list[ConflictContext] = state.get("conflict_context", [])  # type: ignore[union-attr]
+
+    human_msg = _last_human_msg(messages)
+    if human_msg is None:
+        return {"fact_updates": [], "correction_updates": []}
+    user_text = get_str_content(human_msg)
+
+    if awaiting_conflict:
+        # Case 3: conflict clarification
+        conflict_summary = "\n".join(
+            f'- Existing: "{c["existing"]}" | New: "{c["new"]}"'
+            for c in conflict_context
+        )
+        prompt = (
+            "The user previously had a memory conflict that needs clarifying.\n\n"
+            f"Conflicts:\n{conflict_summary}\n\n"
+            f"User clarification: {user_text!r}\n\n"
+            "case=conflict_resolution. Populate fact_updates with the resolved "
+            "fact(s). Set conflicts_with=[] — persistence node handles deletion."
+        )
+    elif awaiting_correction:
+        # Case 2: correction check
+        prior_ai = _prior_ai_content(messages)
+        prompt = (
+            f"The AI gave an uncertain answer: {prior_ai!r}\n"
+            f"The user responded: {user_text!r}\n\n"
+            "If the user is correcting the AI: case=correction, populate "
+            "correction_updates (original_answer, correction, root_cause). "
+            "If the user is asking something new: case=fact_extraction, extract "
+            "any self-referential facts into fact_updates."
+        )
+    else:
+        # Case 1: normal fact extraction
+        prompt = (
+            f"User message: {user_text!r}\n\n"
+            "case=fact_extraction. Extract self-referential facts (statements "
+            "where the user describes themselves, e.g. 'I work as X', 'I live "
+            "in Y', 'I prefer Z'). Return empty fact_updates if none exist. "
+            "Set conflicts_with=[] for every fact."
+        )
+
+    output: MemoryAgentOutput = await _llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
+
+    updates: dict[str, object] = {
+        "fact_updates": list(output.fact_updates),
+        "correction_updates": list(output.correction_updates),
+    }
+
+    # State machine transitions
+    if awaiting_conflict:
+        # D4: mutually exclusive — reset both flags
+        updates["awaiting_conflict_clarification"] = False
+        updates["awaiting_correction"] = False
+        updates["conflict_context"] = []
+    elif awaiting_correction:
+        updates["awaiting_correction"] = False
+
+    return updates
