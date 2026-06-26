@@ -8,8 +8,8 @@ from second_brain.api.routers.ingest import router as ingest_router
 from second_brain.api.routers.query import router as query_router
 from second_brain.api.routers.query import shutdown_query_graph
 from second_brain.config import settings
+from second_brain.db.pool import shutdown_pgvector_pool
 from second_brain.nodes import ingestion_agent
-from second_brain.nodes.rag_retrieval import shutdown_rag_pool
 from second_brain.observability.tracing import setup_tracing
 from second_brain.services import embeddings
 
@@ -41,9 +41,9 @@ async def lifespan(_app: FastAPI):
     except Exception:
         _logger.warning("shutdown_query_graph() raised an exception", exc_info=True)
     try:
-        await shutdown_rag_pool()
+        await shutdown_pgvector_pool()
     except Exception:
-        _logger.warning("shutdown_rag_pool() raised an exception", exc_info=True)
+        _logger.warning("shutdown_pgvector_pool() raised an exception", exc_info=True)
 
 
 app = FastAPI(title="Second Brain", version="0.1.0", lifespan=lifespan)

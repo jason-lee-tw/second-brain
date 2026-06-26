@@ -1,13 +1,11 @@
 """Unit tests for the RAG retrieval node."""
 
-import json
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
 
-from second_brain.nodes import rag_retrieval
 from tests.unit.conftest import make_state
 
 MOCK_EMBEDDING = [0.1, 0.2, 0.3]
@@ -111,69 +109,8 @@ async def test_retrieve_from_rag_uses_last_message():
 
 
 # ---------------------------------------------------------------------------
-# Pool singleton tests
+# _query_pgvector tests (pool is now shared via db/pool.py)
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_get_rag_pool_creates_pool_once():
-    """Pool singleton: asyncpg.create_pool is called exactly once on repeated calls."""
-    from second_brain.nodes.rag_retrieval import _get_rag_pool, _setup_conn
-
-    # Reset singleton so the test is isolated
-    rag_retrieval._rag_pool = None
-
-    mock_pool = AsyncMock()
-
-    with patch(
-        "second_brain.nodes.rag_retrieval.asyncpg.create_pool",
-        new=AsyncMock(return_value=mock_pool),
-    ) as mock_create:
-        pool1 = await _get_rag_pool("postgresql://test/db")
-        pool2 = await _get_rag_pool("postgresql://test/db")
-
-    mock_create.assert_awaited_once_with("postgresql://test/db", init=_setup_conn)
-    assert pool1 is pool2
-
-    # Clean up module-level state
-    rag_retrieval._rag_pool = None
-
-
-@pytest.mark.asyncio
-async def test_shutdown_rag_pool_closes_and_resets():
-    """shutdown_rag_pool closes the pool and resets the singleton to None."""
-    from second_brain.nodes.rag_retrieval import shutdown_rag_pool
-
-    mock_pool = AsyncMock()
-    rag_retrieval._rag_pool = mock_pool
-
-    await shutdown_rag_pool()
-
-    mock_pool.close.assert_awaited_once()
-    assert rag_retrieval._rag_pool is None
-
-
-@pytest.mark.asyncio
-async def test_setup_conn_registers_vector_and_jsonb_codec():
-    """_setup_conn must call register_vector AND set_type_codec for jsonb."""
-    from second_brain.nodes.rag_retrieval import _setup_conn
-
-    mock_conn = AsyncMock()
-
-    with patch(
-        "second_brain.nodes.rag_retrieval.register_vector",
-        new=AsyncMock(),
-    ) as mock_rv:
-        await _setup_conn(mock_conn)
-
-    mock_rv.assert_awaited_once_with(mock_conn)
-    mock_conn.set_type_codec.assert_awaited_once_with(
-        "jsonb",
-        encoder=json.dumps,
-        decoder=json.loads,
-        schema="pg_catalog",
-        format="text",
-    )
 
 
 @pytest.mark.asyncio
@@ -210,19 +147,13 @@ async def test_query_pgvector_uses_pool_acquire():
 
     mock_pool.acquire = fake_acquire
 
-    with (
-        patch(
-            "second_brain.nodes.rag_retrieval._get_rag_pool",
-            new=AsyncMock(return_value=mock_pool),
-        ) as mock_get_pool,
-        patch(
-            "second_brain.nodes.rag_retrieval.asyncpg.connect",
-        ) as mock_connect,
-    ):
-        result = await _query_pgvector([0.1, 0.2, 0.3], "postgresql://test/db")
+    with patch(
+        "second_brain.nodes.rag_retrieval.get_pgvector_pool",
+        new=AsyncMock(return_value=mock_pool),
+    ) as mock_get_pool:
+        result = await _query_pgvector([0.1, 0.2, 0.3])
 
     mock_get_pool.assert_awaited_once()
-    mock_connect.assert_not_called()
     assert len(result) == 1
     assert result[0]["content"] == "Test content"
     assert result[0]["score"] == 0.9
@@ -257,10 +188,10 @@ async def test_query_pgvector_empty_metadata_returns_none():
     mock_pool.acquire = fake_acquire
 
     with patch(
-        "second_brain.nodes.rag_retrieval._get_rag_pool",
+        "second_brain.nodes.rag_retrieval.get_pgvector_pool",
         new=AsyncMock(return_value=mock_pool),
     ):
-        result = await _query_pgvector([0.1, 0.2, 0.3], "postgresql://test/db")
+        result = await _query_pgvector([0.1, 0.2, 0.3])
 
     assert len(result) == 1
     assert result[0]["metadata"] is None
