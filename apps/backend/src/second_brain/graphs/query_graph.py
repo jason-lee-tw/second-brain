@@ -10,7 +10,7 @@ from langgraph.types import Send
 from psycopg_pool import AsyncConnectionPool
 
 from second_brain.graphs.state import SecondBrainState
-from second_brain.nodes.memory_retrieval import retrieve_memory
+from second_brain.nodes.memory_retrieval import memory_retrieval_node
 from second_brain.nodes.orchestrator import route_query
 from second_brain.nodes.pii_redaction import redact_inbound, redact_outbound
 from second_brain.nodes.rag_retrieval import retrieve_from_rag
@@ -65,7 +65,7 @@ async def build_query_graph(
 
     # Nodes
     workflow.add_node("redact_inbound", redact_inbound)
-    workflow.add_node("retrieve_memory", retrieve_memory)
+    workflow.add_node("retrieve_memory", memory_retrieval_node)
     workflow.add_node("orchestrator", route_query)
     workflow.add_node("rag_retrieval", retrieve_from_rag)
     workflow.add_node("web_research", search_web)
