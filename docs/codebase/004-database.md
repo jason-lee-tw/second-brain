@@ -54,3 +54,66 @@ A third connection (`psycopg_pool.AsyncConnectionPool`, psycopg3 driver) is mana
 | `asyncpg.Pool`        | asyncpg             | `db/pool.py` → shared by nodes |
 | `Engine` (sync)       | psycopg2/SQLAlchemy | `db/session.py` → writes       |
 | `AsyncConnectionPool` | psycopg3            | LangGraph `AsyncPostgresSaver` |
+
+---
+
+## Schema
+
+```mermaid
+erDiagram
+    chat_history {
+        UUID7 session_id PK
+        JSONB thread_data
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    ingested_documents {
+        UUID id PK
+        TEXT filename
+        TEXT source_url
+        TEXT content_hash
+        TEXT status
+        TIMESTAMP ingested_at
+    }
+    document_chunks {
+        UUID id PK
+        UUID doc_id FK
+        TEXT content
+        VECTOR embedding
+        INT chunk_index
+        JSONB metadata
+        TIMESTAMP created_at
+    }
+    learned_facts {
+        UUID id PK
+        TEXT fact
+        VECTOR embedding
+        UUID7 source_session FK
+        FLOAT confidence
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+    model_corrections {
+        UUID id PK
+        TEXT original_answer
+        TEXT correction
+        TEXT root_cause
+        VECTOR embedding
+        UUID7 source_session FK
+        TIMESTAMP created_at
+    }
+
+    ingested_documents ||--o{ document_chunks : "has"
+    chat_history ||--o{ learned_facts : "source_session"
+    chat_history ||--o{ model_corrections : "source_session"
+```
+
+### Embedding field notes
+
+- `document_chunks.embedding` — encodes chunk text + contextual header; pgvector cosine similarity for RAG retrieval
+- `learned_facts.embedding` — encodes the `fact` field; cosine similarity retrieves relevant memory per query
+- `model_corrections.embedding` — encodes the `correction` field, **NOT** `original_answer`; similarity surfaces the correct answer, not the mistake
+
+### Python ORM note
+
+`DocumentChunk` uses Python attribute `chunk_metadata` mapped to SQL column `metadata` — avoids SQLAlchemy name conflict. Use `.chunk_metadata` in Python; use `metadata` in raw SQL.

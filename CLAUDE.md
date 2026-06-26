@@ -16,6 +16,14 @@ A personal "Second Brain" knowledge management system. Ingests content from loca
 
 Refer to [001-techstack.md](./docs/codebase/001-tech-stack.md).
 
+## Documentation Index
+
+Each `docs/` subfolder has a `000-index.md` with a one-sentence summary of every document — start there to find relevant context fast:
+
+- [docs/business/000-index.md](./docs/business/000-index.md) — requirements, PRD, implementation plan, workflow diagrams
+- [docs/codebase/000-index.md](./docs/codebase/000-index.md) — tech stack, repo structure, system architecture, database schema
+- [docs/bugs/000-index.md](./docs/bugs/000-index.md) — documented bugs and their root-cause decisions
+
 ## Structure
 
 Refer to [002-repo-structure.md](./docs/codebase/002-repo-structure.md).
