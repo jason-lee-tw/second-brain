@@ -142,4 +142,3 @@ class SynthesisNodeOutput(TypedDict):
     final_answer: str
     confidence: float
     is_uncertain: bool
-    awaiting_correction: bool

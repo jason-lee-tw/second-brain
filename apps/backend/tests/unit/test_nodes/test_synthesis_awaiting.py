@@ -26,8 +26,8 @@ def _make_state(**overrides) -> SecondBrainState:
 
 
 @pytest.mark.asyncio
-async def test_synthesis_sets_awaiting_correction_when_uncertain():
-    """D9: confidence < 0.7 → is_uncertain=True AND awaiting_correction=True."""
+async def test_synthesis_sets_is_uncertain_when_low_confidence():
+    """confidence < 0.7 → is_uncertain=True (awaiting_correction is set downstream)."""
     from second_brain.nodes.synthesis import _SynthesisOutput
 
     mock_output = MagicMock(spec=_SynthesisOutput)
@@ -40,12 +40,12 @@ async def test_synthesis_sets_awaiting_correction_when_uncertain():
         result = await synthesize_answer(_make_state())
 
     assert result["is_uncertain"] is True
-    assert result["awaiting_correction"] is True
+    assert "awaiting_correction" not in result
 
 
 @pytest.mark.asyncio
-async def test_synthesis_does_not_set_awaiting_correction_when_confident():
-    """confidence >= 0.7 → is_uncertain=False AND awaiting_correction=False."""
+async def test_synthesis_sets_is_uncertain_false_when_confident():
+    """confidence >= 0.7 → is_uncertain=False."""
     from second_brain.nodes.synthesis import _SynthesisOutput
 
     mock_output = MagicMock(spec=_SynthesisOutput)
@@ -58,4 +58,4 @@ async def test_synthesis_does_not_set_awaiting_correction_when_confident():
         result = await synthesize_answer(_make_state())
 
     assert result["is_uncertain"] is False
-    assert result["awaiting_correction"] is False
+    assert "awaiting_correction" not in result

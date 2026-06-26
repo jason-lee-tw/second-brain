@@ -139,7 +139,10 @@ async def memory_persistence_node(state: SecondBrainState) -> dict[str, Any]:
         embedding = await embed_text(correction["correction"])
         _retry_write(_write_correction, correction, session_id, embedding)
 
+    # Set awaiting_correction AFTER memory_agent so the flag is available in the
+    # NEXT turn's memory_agent (cross-turn correction detection).
     result: dict[str, Any] = {
+        "awaiting_correction": state.get("is_uncertain", False),
         "awaiting_conflict_clarification": bool(conflict_contexts),
         "conflict_context": conflict_contexts,
         "fact_updates": pending_facts if conflict_contexts else [],

@@ -103,5 +103,5 @@ async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
         "final_answer": output.final_answer,
         "confidence": confidence,
         "is_uncertain": is_uncertain,
-        "awaiting_correction": is_uncertain,  # D9: set alongside is_uncertain
+        # ponytail: awaiting_correction is set by memory_persistence_node, not here
     }

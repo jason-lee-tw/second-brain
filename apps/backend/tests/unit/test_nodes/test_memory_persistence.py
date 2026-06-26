@@ -255,3 +255,46 @@ async def test_per_fact_retry_raises_after_three_failures():
 
         with pytest.raises(RuntimeError, match="DB write failed"):
             await memory_persistence_node(state)
+
+
+# ── awaiting_correction set by memory_persistence ─────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sets_awaiting_correction_true_when_is_uncertain():
+    """D9: is_uncertain=True → awaiting_correction=True in persistence output."""
+    from second_brain.nodes.memory_persistence import memory_persistence_node
+
+    state = _make_state(is_uncertain=True)
+
+    with (
+        patch(
+            "second_brain.nodes.memory_persistence.get_pgvector_pool",
+            new_callable=AsyncMock,
+            return_value=_mock_pool(),
+        ),
+        patch("second_brain.nodes.memory_persistence.Session"),
+    ):
+        result = await memory_persistence_node(state)
+
+    assert result["awaiting_correction"] is True
+
+
+@pytest.mark.asyncio
+async def test_sets_awaiting_correction_false_when_not_uncertain():
+    """confident turn → awaiting_correction=False in persistence output."""
+    from second_brain.nodes.memory_persistence import memory_persistence_node
+
+    state = _make_state(is_uncertain=False)
+
+    with (
+        patch(
+            "second_brain.nodes.memory_persistence.get_pgvector_pool",
+            new_callable=AsyncMock,
+            return_value=_mock_pool(),
+        ),
+        patch("second_brain.nodes.memory_persistence.Session"),
+    ):
+        result = await memory_persistence_node(state)
+
+    assert result["awaiting_correction"] is False
