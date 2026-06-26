@@ -36,6 +36,8 @@ A personal knowledge management system ("Second Brain") that ingests content fro
 }
 ```
 
+> **Breaking change (Ticket 5):** `conflictContext` changes from `list[str]` to `list[ConflictContext]` — each item is `{"existing": "...", "existing_id": "uuid", "new": "..."}`.
+
 `sessionId` is `null` for a new conversation; a UUID7 continues an existing session. The `sessionId` is the LangGraph `threadId` and the chat history key.
 
 ### `/ingest/file` response
@@ -120,6 +122,10 @@ The two networks are fully isolated — the backend has no access to `phoenix_ne
 
 > **Linux note:** On Linux Docker hosts, the backend service requires `extra_hosts: ["host.docker.internal:host-gateway"]` in `docker-compose.yml` to reach the host port. Docker Desktop (Mac/Windows) provides this automatically.
 
+### Connection Pool Architecture
+
+`db/pool.py` is the shared asyncpg pool singleton for pgvector queries. Both `rag_retrieval` and `memory_retrieval_node` import `get_pgvector_pool()` from it — no redundant pools for the same DB. Two distinct pools coexist at the application level (asyncpg for pgvector reads, psycopg3 for LangGraph checkpointing); within the asyncpg layer, `db/pool.py` is the single source.
+
 ---
 
 ## 5. Query Graph — Agent Responsibilities
@@ -155,7 +161,7 @@ flowchart TD
     I["PIIRedactionNode (outbound)\nredacts final_answer before appending to messages"]
     I --> J
 
-    J["Memory Agent · claude-haiku-4-5\nfact extraction + correction detection\nreads messages[-2] + messages[-1]"]
+    J["Memory Agent · claude-haiku-4-5\nwith_structured_output(MemoryAgentOutput)\nclassifies via MemoryCase StrEnum\nwalks messages by type"]
     J -->|conflict detected| K
     J -->|no conflict| L
 
@@ -170,18 +176,18 @@ flowchart TD
 
 ### Agent Roles
 
-| Agent                      | Model               | Responsibility                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **PIIRedactionNode (in)**  | rule-based          | Redacts PII from `messages[-1].content` using broad scope (names, emails, phones, addresses, IDs, financial, medical). Replaces with typed placeholders: `[NAME]`, `[EMAIL]`, `[PHONE]`, `[ADDRESS]`, `[ID]`, `[CARD]`, `[MEDICAL]`                                                                                                                                |
-| **MemoryRetrievalNode**    | tool call           | Cosine similarity search on `learned_facts` and `model_corrections` tables, returns top-k items relevant to current query. Populates `retrieved_memory`                                                                                                                                                                                                            |
-| **Orchestrator**           | `claude-haiku-4-5`  | Reads `messages[-1].content` + `retrieved_memory`. Routes to: `rag` / `web` / `both` / `neither`. Uses LangGraph `Send` for fan-out parallelism                                                                                                                                                                                                                    |
-| **RAG Retrieval**          | tool call           | Embeds query via Ollama, cosine similarity search on `document_chunks` pgvector, returns top-k=5 chunks with scores                                                                                                                                                                                                                                                |
-| **Web Research**           | `claude-haiku-4-5`  | Calls Tavily search API, returns top-3 results. Rate-limited                                                                                                                                                                                                                                                                                                       |
-| **Synthesis**              | `claude-sonnet-4-6` | Combines `rag_results` + `web_results` + trimmed `messages` + `retrieved_memory` → `final_answer`. Emits `confidence` (0–1). Sets `is_uncertain=True` if confidence < 0.7. For `neither` routing: uses chat history + memory only, confidence floor 0.5                                                                                                            |
-| **PIIRedactionNode (out)** | rule-based          | Redacts PII from `final_answer` before it is appended to `messages` and persisted to chat history                                                                                                                                                                                                                                                                  |
-| **Memory Agent**           | `claude-haiku-4-5`  | (1) Extracts user facts from every message; (2) if `awaiting_correction=True` and message is a correction: extracts root cause → `correction_updates`; (3) if `awaiting_correction=True` and message is NOT a correction: resets to False and proceeds with fact extraction; (4) if `awaiting_conflict_clarification=True`: resolves conflict per user instruction |
-| **MemoryPersistenceNode**  | tool call           | Reads `fact_updates` + `correction_updates` from state, generates embeddings via Ollama, writes to `learned_facts` / `model_corrections` tables                                                                                                                                                                                                                    |
-| **Ingestion Agent**        | `claude-haiku-4-5`  | Chunks documents with hybrid strategy, generates contextual retrieval headers per chunk, embeds via Ollama, upserts to `document_chunks`                                                                                                                                                                                                                           |
+| Agent                      | Model               | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **PIIRedactionNode (in)**  | rule-based          | Redacts PII from `messages[-1].content` using broad scope (names, emails, phones, addresses, IDs, financial, medical). Replaces with typed placeholders: `[NAME]`, `[EMAIL]`, `[PHONE]`, `[ADDRESS]`, `[ID]`, `[CARD]`, `[MEDICAL]`                                                                                                                                                                                                                                                                                      |
+| **MemoryRetrievalNode**    | tool call           | Cosine similarity search on `learned_facts` and `model_corrections` tables, returns top-k items relevant to current query. Populates `retrieved_memory`                                                                                                                                                                                                                                                                                                                                                                  |
+| **Orchestrator**           | `claude-haiku-4-5`  | Reads `messages[-1].content` + `retrieved_memory`. Routes to: `rag` / `web` / `both` / `neither`. Uses LangGraph `Send` for fan-out parallelism                                                                                                                                                                                                                                                                                                                                                                          |
+| **RAG Retrieval**          | tool call           | Embeds query via Ollama, cosine similarity search on `document_chunks` pgvector, returns top-k=5 chunks with scores                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Web Research**           | `claude-haiku-4-5`  | Calls Tavily search API, returns top-3 results. Rate-limited                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Synthesis**              | `claude-sonnet-4-6` | Combines `rag_results` + `web_results` + trimmed `messages` + `retrieved_memory` → `final_answer`. Emits `confidence` (0–1). Sets `is_uncertain=True` **AND** `awaiting_correction=True` when `confidence < 0.7`. For `neither` routing: uses chat history + memory only, confidence floor 0.5                                                                                                                                                                                                                           |
+| **PIIRedactionNode (out)** | rule-based          | Redacts PII from `final_answer` before it is appended to `messages` and persisted to chat history                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Memory Agent**           | `claude-haiku-4-5`  | Uses LangChain-Anthropic `with_structured_output(MemoryAgentOutput)`. Three cases via `MemoryCase`: (1) `FACT_EXTRACTION` — default, extracts self-referential facts; (2) `CORRECTION` — when `awaiting_correction=True`: classifies as correction or new query, always resets `awaiting_correction=False`; (3) `CONFLICT_RESOLUTION` — when `awaiting_conflict_clarification=True`: resolves conflict, also resets `awaiting_correction=False` (mutually exclusive flags). Walks `messages` by type (no fixed indices). |
+| **MemoryPersistenceNode**  | tool call           | Reads `fact_updates` + `correction_updates` from state. Conflict-check reads via asyncpg pool; writes via SQLModel sync `Session(engine)`. Per-fact retry × 3 before failing node. Uses `settings.memory_conflict_threshold` (default 0.85, env: `MEMORY_CONFLICT_THRESHOLD`). Populates `ConflictContext` objects on conflict and sets `awaiting_conflict_clarification=True`. Ollama calls raise on error — no silent degradation.                                                                                     |
+| **Ingestion Agent**        | `claude-haiku-4-5`  | Chunks documents with hybrid strategy, generates contextual retrieval headers per chunk, embeds via Ollama, upserts to `document_chunks`                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ### LangGraph State Definitions
 
@@ -209,9 +215,24 @@ class FactUpdate(TypedDict):
     conflicts_with: list[str]   # IDs of conflicting existing facts
 
 class CorrectionUpdate(TypedDict):
-    original_answer: str        # from messages[-2] (prior assistant response)
+    original_answer: str        # prior AI response (found by walking messages by type)
     correction: str
     root_cause: str
+
+class ConflictContext(TypedDict):
+    existing: str       # text of the existing fact
+    existing_id: str    # UUID of the existing learned_fact row
+    new: str            # text of the proposed new fact
+
+class MemoryCase(StrEnum):
+    FACT_EXTRACTION = "fact_extraction"
+    CORRECTION = "correction"
+    CONFLICT_RESOLUTION = "conflict_resolution"
+
+class MemoryAgentOutput(BaseModel):        # Pydantic — used with LangChain with_structured_output
+    case: MemoryCase
+    fact_updates: list[FactUpdate] = []
+    correction_updates: list[CorrectionUpdate] = []
 
 class SecondBrainState(TypedDict):
     session_id: str
@@ -225,7 +246,7 @@ class SecondBrainState(TypedDict):
     is_uncertain: bool
     awaiting_correction: bool                # persisted across turns via LangGraph checkpointing
     awaiting_conflict_clarification: bool
-    conflict_context: list[str]
+    conflict_context: list[ConflictContext]  # BREAKING CHANGE: was list[str]
     fact_updates: list[FactUpdate]
     correction_updates: list[CorrectionUpdate]
 ```
@@ -341,15 +362,22 @@ This significantly reduces retrieval failure rate (Anthropic research: 49–67% 
 
 - Auto-extracted from every user message when the user refers to themselves
 - Embedded via Ollama before storing (enables semantic retrieval)
-- Before storing: check for conflicts via cosine similarity against existing facts
-  - If conflict detected: set `awaiting_conflict_clarification=True`, surface conflict in response, wait for user clarification
-  - After clarification: add / modify / remove conflicting fact per user instruction
+- Before storing: check for conflicts via cosine similarity against existing facts (`settings.memory_conflict_threshold`, default 0.85)
+  - If conflict detected: populate `ConflictContext` objects, set `awaiting_conflict_clarification=True`, surface conflict in response, wait for user clarification
+  - After clarification: Memory Agent classifies as `CONFLICT_RESOLUTION`; `MemoryPersistenceNode` deletes conflicting IDs and writes resolved fact
+- Per-fact retry: up to 3 attempts per fact before failing the entire `MemoryPersistenceNode`
+- Conflict-check reads: asyncpg pool; writes: SQLModel sync `Session(engine)` — same pattern as `ingestion_agent.py`
+- Ollama unavailability in `memory_retrieval_node` fails hard (raises exception) — no silent degradation
+
+### State Flag Invariant
+
+`awaiting_correction` and `awaiting_conflict_clarification` are **mutually exclusive**. When `MemoryAgentNode` enters Case 3 (conflict clarification), it resets `awaiting_correction=False` before returning. This prevents both flags from being set simultaneously.
 
 ### Model Corrections
 
-- Synthesis Agent sets `is_uncertain=True` when `confidence < 0.7`
+- Synthesis Agent sets both `is_uncertain=True` **AND** `awaiting_correction=True` when `confidence < 0.7`
 - `awaiting_correction` is persisted across turns via LangGraph checkpointing
-- When `awaiting_correction=True` and user sends a correction: Memory Agent reads `messages[-2]` (original answer) + `messages[-1]` (correction), extracts root cause, stores to `model_corrections`
+- When `awaiting_correction=True` and user sends a correction: Memory Agent walks `messages` by type to find last `HumanMessage` and prior `AIMessage`, classifies as `CORRECTION`, extracts root cause → `correction_updates`
 - When `awaiting_correction=True` and user sends a non-correction: reset `awaiting_correction=False`, proceed with normal fact extraction
 
 ### PII Guardrail
