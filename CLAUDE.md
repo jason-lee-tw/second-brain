@@ -42,7 +42,9 @@ Refer to [002-repo-structure.md](./docs/codebase/002-repo-structure.md).
 
 ```bash
 just init        # uv sync --all-extras (installs all workspace members + dev tools) + install git hooks (run once)
-just up-all      # run backend + Phoenix via Docker Compose and start Ollama
+just up-all      # Start Ollama and run all other services via Docker Compose
+just down-all    # Stop Ollama and all other services via Docker Compose
+just down-clean  # Stop all services (except Ollama) and clear all volumes via Docker Compose
 just lint        # ruff check across entire workspace
 just test-unit   # run apps/backend unit tests
 just type-check  # run apps/backend type check
