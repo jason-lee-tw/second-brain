@@ -36,41 +36,6 @@ def db_engine():
     engine.dispose()
 
 
-@pytest.fixture(scope="module", autouse=True)
-def ensure_chat_session(db_engine):
-    """Ensure chat_history row exists for _TEST_SESSION_ID (required by FK).
-
-    learned_facts and model_corrections have source_session → chat_history FK.
-    Without this row any INSERT into those tables raises a FK violation.
-    """
-    with db_engine.connect() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO chat_history (session_id, thread_data) "
-                "VALUES (:sid, '{}') "
-                "ON CONFLICT DO NOTHING"
-            ),
-            {"sid": _TEST_SESSION_ID},
-        )
-        conn.commit()
-    yield
-    # Teardown: delete in FK-safe order
-    with db_engine.connect() as conn:
-        conn.execute(
-            text("DELETE FROM learned_facts WHERE source_session = :sid"),
-            {"sid": _TEST_SESSION_ID},
-        )
-        conn.execute(
-            text("DELETE FROM model_corrections WHERE source_session = :sid"),
-            {"sid": _TEST_SESSION_ID},
-        )
-        conn.execute(
-            text("DELETE FROM chat_history WHERE session_id = :sid"),
-            {"sid": _TEST_SESSION_ID},
-        )
-        conn.commit()
-
-
 @pytest.fixture(autouse=True)
 def clean_test_rows(db_engine):
     """Delete rows written by this test session before each test."""
