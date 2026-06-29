@@ -298,3 +298,84 @@ async def test_sets_awaiting_correction_false_when_not_uncertain():
         result = await memory_persistence_node(state)
 
     assert result["awaiting_correction"] is False
+
+
+# ── F1 regression: conflict loop ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_f1_no_conflict_loop_when_awaiting_clarification():
+    """F1: when awaiting_conflict_clarification=True and LLM omits conflicts_with UUID,
+    persistence must NOT re-enter conflict state (infinite loop prevention).
+
+    Root cause: _persist_fact re-runs _conflict_check when conflicts_with=[] even
+    during conflict-resolution turns, triggering another awaiting_conflict cycle.
+    """
+    from second_brain.nodes.memory_persistence import memory_persistence_node
+
+    # Simulate: conflict was already detected last turn; LLM failed to propagate UUID
+    conflict_row = {"id": "existing-id", "fact": "User lives in Berlin", "score": 0.92}
+    state = _make_state(
+        awaiting_conflict_clarification=True,
+        fact_updates=[
+            {
+                "fact": "User lives in Tokyo",
+                "confidence": 0.9,
+                "conflicts_with": [],  # LLM omitted UUID — the F1 bug trigger
+            }
+        ],
+    )
+
+    with (
+        patch(
+            "second_brain.nodes.memory_persistence.embed_text",
+            new_callable=AsyncMock,
+            return_value=[0.5] * 1024,
+        ),
+        patch(
+            "second_brain.nodes.memory_persistence.get_pgvector_pool",
+            new_callable=AsyncMock,
+            return_value=_mock_pool([conflict_row]),
+        ),
+        patch("second_brain.nodes.memory_persistence.Session") as mock_session_cls,
+    ):
+        mock_session = MagicMock()
+        mock_session_cls.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_session_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = await memory_persistence_node(state)
+
+    # Must NOT re-enter conflict state — that would restart the loop
+    assert result["awaiting_conflict_clarification"] is False
+    # Fact must be written (user already resolved conflict by choosing the new one)
+    mock_session.add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_f1_keep_existing_produces_no_write_and_no_conflict():
+    """F1 edge: if user resolved by keeping old fact (fact_updates=[]),
+    persistence must write nothing and set awaiting_conflict_clarification=False.
+    """
+    from second_brain.nodes.memory_persistence import memory_persistence_node
+
+    state = _make_state(
+        awaiting_conflict_clarification=True,
+        fact_updates=[],  # memory_agent returned empty (keep existing)
+    )
+
+    with (
+        patch(
+            "second_brain.nodes.memory_persistence.get_pgvector_pool",
+            new_callable=AsyncMock,
+            return_value=_mock_pool(),
+        ),
+        patch("second_brain.nodes.memory_persistence.Session") as mock_session_cls,
+    ):
+        mock_session = MagicMock()
+        mock_session_cls.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_session_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = await memory_persistence_node(state)
+
+    assert result["awaiting_conflict_clarification"] is False
+    mock_session.add.assert_not_called()

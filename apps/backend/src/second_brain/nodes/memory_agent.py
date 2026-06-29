@@ -92,8 +92,25 @@ async def memory_agent_node(state: SecondBrainState) -> dict[str, object]:
 
     output: MemoryAgentOutput = await _llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
 
+    # F1 fix: in Case 3 the LLM may omit conflicts_with UUIDs (unreliable).
+    # The pending_facts stored in state["fact_updates"] from the previous turn
+    # already carry the correct conflicts_with — copy those over when empty so
+    # _persist_fact can delete the replaced fact without re-running _conflict_check.
+    fact_updates_out = list(output.fact_updates)
+    if awaiting_conflict:
+        pending_facts = state.get("fact_updates") or []  # type: ignore[union-attr]
+        annotated = []
+        for i, llm_fact in enumerate(fact_updates_out):
+            if not llm_fact.get("conflicts_with") and i < len(pending_facts):
+                annotated.append(
+                    {**llm_fact, "conflicts_with": pending_facts[i]["conflicts_with"]}
+                )
+            else:
+                annotated.append(llm_fact)
+        fact_updates_out = annotated
+
     updates: dict[str, object] = {
-        "fact_updates": list(output.fact_updates),
+        "fact_updates": fact_updates_out,
         "correction_updates": list(output.correction_updates),
     }
 

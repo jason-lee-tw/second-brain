@@ -199,6 +199,8 @@ async def test_case3_resolves_conflict_and_resets_flags():
     assert result["awaiting_correction"] is False  # D4: mutually exclusive
     assert result["conflict_context"] == []
     assert len(result["fact_updates"]) == 1
+    # F1 fix: conflicts_with must be annotated from pending_facts (LLM may omit UUID)
+    assert result["fact_updates"][0]["conflicts_with"] == ["id-1"]
 
 
 @pytest.mark.asyncio

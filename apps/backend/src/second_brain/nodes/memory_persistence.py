@@ -104,12 +104,21 @@ def _write_correction(
 async def _persist_fact(
     fact_update: FactUpdate,
     session_id: str,
+    skip_conflict_check: bool = False,
 ) -> dict[str, Any] | None:
-    """Persist one fact. Returns conflict dict on conflict, None on success."""
+    """Persist one fact. Returns conflict dict on conflict, None on success.
+
+    skip_conflict_check should be True when the caller is already in a
+    conflict-resolution turn (awaiting_conflict_clarification=True).  This
+    prevents _conflict_check from firing again when the LLM omitted the
+    conflicts_with UUID, which would otherwise cause an infinite loop (F1).
+    """
     embedding = await embed_text(fact_update["fact"])
 
-    # conflicts_with non-empty → user resolved conflict; delete old facts then write
-    if fact_update.get("conflicts_with"):
+    # conflicts_with non-empty → user resolved conflict; delete old facts then write.
+    # skip_conflict_check → conflict was already handled last turn; write directly
+    # even if the LLM omitted the UUID (prevents re-entering conflict state, F1 fix).
+    if fact_update.get("conflicts_with") or skip_conflict_check:
         await asyncio.to_thread(
             _retry_write, _write_fact, fact_update, session_id, embedding
         )
@@ -136,11 +145,17 @@ async def memory_persistence_node(state: SecondBrainState) -> dict[str, Any]:
     session_id: str = state["session_id"]
     final_answer: str = state.get("final_answer", "")
 
+    # F1 fix: if we are resolving a conflict from a prior turn, skip _conflict_check
+    # even when the LLM omits conflicts_with — prevents re-entering conflict state.
+    coming_from_conflict: bool = state.get("awaiting_conflict_clarification", False)  # type: ignore[union-attr]
+
     conflict_contexts: list[dict[str, Any]] = []
     pending_facts: list[dict[str, Any]] = []
 
     for fact_update in fact_updates:
-        conflict = await _persist_fact(fact_update, session_id)
+        conflict = await _persist_fact(
+            fact_update, session_id, skip_conflict_check=coming_from_conflict
+        )
         if conflict is not None:
             conflict_contexts.append(conflict)
             pending_facts.append(
