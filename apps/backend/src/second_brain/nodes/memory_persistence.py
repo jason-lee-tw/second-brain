@@ -18,7 +18,7 @@ from second_brain.config import settings
 from second_brain.db.models import LearnedFact, ModelCorrection
 from second_brain.db.pool import get_pgvector_pool
 from second_brain.db.session import engine
-from second_brain.graphs.state import SecondBrainState
+from second_brain.graphs.state import CorrectionUpdate, FactUpdate, SecondBrainState
 from second_brain.services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def _retry_write(fn: Any, *args: Any) -> None:
 
 
 def _write_fact(
-    fact_update: dict[str, Any],
+    fact_update: FactUpdate,
     session_id: str,
     embedding: list[float],
 ) -> None:
@@ -83,7 +83,7 @@ def _write_fact(
 
 
 def _write_correction(
-    correction: dict[str, Any],
+    correction: CorrectionUpdate,
     session_id: str,
     embedding: list[float],
 ) -> None:
@@ -102,7 +102,7 @@ def _write_correction(
 
 
 async def _persist_fact(
-    fact_update: dict[str, Any],
+    fact_update: FactUpdate,
     session_id: str,
 ) -> dict[str, Any] | None:
     """Persist one fact. Returns conflict dict on conflict, None on success."""
@@ -131,8 +131,8 @@ async def _persist_fact(
 
 async def memory_persistence_node(state: SecondBrainState) -> dict[str, Any]:
     """Tool-call node: embeds and persists fact_updates + correction_updates."""
-    fact_updates: list[dict[str, Any]] = state.get("fact_updates") or []
-    correction_updates: list[dict[str, Any]] = state.get("correction_updates") or []
+    fact_updates: list[FactUpdate] = state.get("fact_updates") or []
+    correction_updates: list[CorrectionUpdate] = state.get("correction_updates") or []
     session_id: str = state["session_id"]
     final_answer: str = state.get("final_answer", "")
 
