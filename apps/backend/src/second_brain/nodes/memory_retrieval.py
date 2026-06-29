@@ -7,6 +7,7 @@ import asyncio
 
 import asyncpg
 
+from second_brain.config import settings
 from second_brain.db.pool import get_pgvector_pool
 from second_brain.graphs.state import MemoryItem, RetrieveMemoryOutput, SecondBrainState
 from second_brain.services.embeddings import embed_text
@@ -19,8 +20,11 @@ async def _search_facts(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id::text, fact, confidence, 1-(embedding<=>$1) AS score"
-            " FROM learned_facts ORDER BY embedding<=>$1 ASC LIMIT 5",
+            " FROM learned_facts"
+            " WHERE (embedding<=>$1) < (1 - $2)"
+            " ORDER BY embedding<=>$1 ASC LIMIT 5",
             embedding,
+            settings.memory_retrieval_threshold,
         )
         return [
             (
@@ -42,8 +46,11 @@ async def _search_corrections(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id::text, correction AS fact, 1-(embedding<=>$1) AS score"
-            " FROM model_corrections ORDER BY embedding<=>$1 ASC LIMIT 3",
+            " FROM model_corrections"
+            " WHERE (embedding<=>$1) < (1 - $2)"
+            " ORDER BY embedding<=>$1 ASC LIMIT 3",
             embedding,
+            settings.memory_retrieval_threshold,
         )
         return [
             (
