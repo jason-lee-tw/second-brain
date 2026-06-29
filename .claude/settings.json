@@ -26,5 +26,9 @@
   "enabledPlugins": {
     "ponytail@ponytail": true,
     "autonomous-development-plugin@autonomous-development": true
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
   }
 }

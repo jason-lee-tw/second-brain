@@ -18,4 +18,6 @@ echo "$staged_files" | while IFS= read -r file; do
   [ -e "$file" ] && git add -- "$file"
 done
 
+just type-check
+
 echo "✅ Pre-commit checks passed."

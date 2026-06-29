@@ -98,8 +98,10 @@ async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
     if routing == "neither":
         confidence = max(confidence, _NEITHER_CONFIDENCE_FLOOR)
 
+    is_uncertain = confidence < _UNCERTAINTY_THRESHOLD
     return {
         "final_answer": output.final_answer,
         "confidence": confidence,
-        "is_uncertain": confidence < _UNCERTAINTY_THRESHOLD,
+        "is_uncertain": is_uncertain,
+        # ponytail: awaiting_correction is set by memory_persistence_node, not here
     }

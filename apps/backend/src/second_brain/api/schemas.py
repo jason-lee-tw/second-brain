@@ -15,10 +15,16 @@ class QueryRequest(BaseModel):
     sessionId: str | None = None
 
 
+class ConflictContextItem(BaseModel):
+    existing: str
+    existing_id: str
+    new: str
+
+
 class QueryResponse(BaseModel):
     answer: str
     sessionId: str
     confidence: float
     isUncertain: bool
     conflictDetected: bool
-    conflictContext: list[str]
+    conflictContext: list[ConflictContextItem]

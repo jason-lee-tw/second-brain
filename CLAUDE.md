@@ -36,7 +36,7 @@ Refer to [002-repo-structure.md](./docs/codebase/002-repo-structure.md).
 - Backend never joins `phoenix_network` — OTEL traces reach Phoenix via host port 6006 only. On Linux Docker hosts, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the backend service.
 - Imports are rooted at `src/` via `pythonpath = src` in `apps/backend/pytest.ini`, e.g. `from second_brain.config import settings`.
 - Dockerfiles live in `docker/` named `Dockerfile.<service>` (e.g. `Dockerfile.backend`) — each service's build context remains its own app directory (`apps/<service>/`).
-- Two Postgres connection pools coexist: `asyncpg.Pool` in `nodes/rag_retrieval.py` (required by `pgvector.asyncpg`) and `psycopg_pool.AsyncConnectionPool` in `graphs/query_graph.py` (required by LangGraph's `AsyncPostgresSaver`). They cannot share a pool — different drivers.
+- Two Postgres connection pools coexist: `asyncpg.Pool` in `db/pool.py` (shared by `rag_retrieval` and `memory_retrieval_node` via `get_pgvector_pool()`) and `psycopg_pool.AsyncConnectionPool` in `graphs/query_graph.py` (required by LangGraph's `AsyncPostgresSaver`). They cannot share a pool — different drivers.
 
 ## Build & Verify
 

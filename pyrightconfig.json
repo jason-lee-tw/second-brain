@@ -11,10 +11,10 @@
   // variables inferred from Unknown-typed asyncpg rows and SQLModel expressions
   // re-enable together with reportUnknownMemberType
   "reportUnknownVariableType": "none",
-  // kept at warning so unknown-type propagation stays visible without blocking CI
-  "reportUnknownArgumentType": "warning",
-  // kept at warning so unknown lambda inference stays visible without blocking CI
-  "reportUnknownLambdaType": "warning",
+  // kept at information so unknown-type propagation stays visible without blocking CI
+  "reportUnknownArgumentType": "information",
+  // kept at information so unknown lambda inference stays visible without blocking CI
+  "reportUnknownLambdaType": "information",
   // AsyncConnectionPool[Any] in query_graph.py (psycopg_pool generic not re-exported)
   // and Callable[..., Any] in tracing.py decorator factory
   "reportAny": "none",

@@ -10,7 +10,9 @@ from langgraph.types import Send
 from psycopg_pool import AsyncConnectionPool
 
 from second_brain.graphs.state import SecondBrainState
-from second_brain.nodes.memory_retrieval import retrieve_memory
+from second_brain.nodes.memory_agent import memory_agent_node
+from second_brain.nodes.memory_persistence import memory_persistence_node
+from second_brain.nodes.memory_retrieval import memory_retrieval_node
 from second_brain.nodes.orchestrator import route_query
 from second_brain.nodes.pii_redaction import redact_inbound, redact_outbound
 from second_brain.nodes.rag_retrieval import retrieve_from_rag
@@ -65,7 +67,9 @@ async def build_query_graph(
 
     # Nodes
     workflow.add_node("redact_inbound", redact_inbound)
-    workflow.add_node("retrieve_memory", retrieve_memory)
+    workflow.add_node("memory_retrieval_node", memory_retrieval_node)
+    workflow.add_node("memory_agent", memory_agent_node)
+    workflow.add_node("memory_persistence", memory_persistence_node)
     workflow.add_node("orchestrator", route_query)
     workflow.add_node("rag_retrieval", retrieve_from_rag)
     workflow.add_node("web_research", search_web)
@@ -74,8 +78,8 @@ async def build_query_graph(
 
     # Edges
     workflow.set_entry_point("redact_inbound")
-    workflow.add_edge("redact_inbound", "retrieve_memory")
-    workflow.add_edge("retrieve_memory", "orchestrator")
+    workflow.add_edge("redact_inbound", "memory_retrieval_node")
+    workflow.add_edge("memory_retrieval_node", "orchestrator")
     workflow.add_conditional_edges(
         "orchestrator",
         _route_retrieval,
@@ -84,7 +88,9 @@ async def build_query_graph(
     workflow.add_edge("rag_retrieval", "synthesis")
     workflow.add_edge("web_research", "synthesis")
     workflow.add_edge("synthesis", "redact_outbound")
-    workflow.add_edge("redact_outbound", END)
+    workflow.add_edge("redact_outbound", "memory_agent")
+    workflow.add_edge("memory_agent", "memory_persistence")
+    workflow.add_edge("memory_persistence", END)
 
     compiled = workflow.compile(checkpointer=checkpointer)
     return compiled, pool

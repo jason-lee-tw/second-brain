@@ -81,7 +81,7 @@ class LearnedFact(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     fact: str  # PII-scrubbed fact text
     embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
-    source_session: str = Field(foreign_key="chat_history.session_id")
+    source_session: str  # audit metadata — no FK enforced
     confidence: float
     created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime | None = Field(
@@ -106,5 +106,5 @@ class ModelCorrection(SQLModel, table=True):
     root_cause: str
     # Embedding encodes `correction` (not `original_answer`) per architecture decision.
     embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
-    source_session: str = Field(foreign_key="chat_history.session_id")
+    source_session: str  # audit metadata — no FK enforced
     created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))

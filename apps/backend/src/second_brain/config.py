@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     ingestion_model: str = "claude-haiku-4-5"
     embedding_model: str = "qwen3-embedding:0.6b"
 
+    # Memory behaviour — calibrated for qwen3-embedding:0.6b which scores all
+    # "User is X" sentences above 0.85; 0.95 catches near-duplicates only
+    memory_conflict_threshold: float = 0.95  # env: MEMORY_CONFLICT_THRESHOLD
+    # ponytail: 0.5 is a starting point; tune against qwen3-embedding:0.6b scores
+    memory_retrieval_threshold: float = 0.5
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
