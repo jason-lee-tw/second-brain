@@ -120,7 +120,11 @@ def main() -> None:
     else:
         all_pairs = []
 
+    done_filenames = {p["source_document"] for p in all_pairs}
     for doc in documents:
+        if doc["filename"] in done_filenames:
+            print(f"  Skipping (already done): {doc['filename']}")
+            continue
         print(f"Generating {args.n_per_doc} Q&A pairs for: {doc['filename']}")
         pairs = generate_qa_pairs_for_document(client, doc, n=args.n_per_doc)
         all_pairs.extend(pairs)

@@ -69,6 +69,7 @@ def run_rag_eval(
     ollama_url: str = _OLLAMA_URL,
 ) -> list[dict]:
     """Run the RAG pipeline for each Q&A pair."""
+    embeddings = OllamaEmbeddings(model=_EMBEDDING_MODEL, base_url=ollama_url)
     results: list[dict] = []
     total = len(qa_pairs)
     for i, pair in enumerate(qa_pairs, start=1):
@@ -76,7 +77,7 @@ def run_rag_eval(
         generated_answer = call_query_endpoint(
             pair["question"], backend_url=backend_url
         )
-        embedding = embed_query(pair["question"], ollama_url=ollama_url)
+        embedding = embeddings.embed_query(pair["question"])
         retrieved_contexts = fetch_top_k_chunks(conn, embedding, k=_TOP_K)
         results.append(
             {

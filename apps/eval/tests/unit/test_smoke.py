@@ -157,17 +157,23 @@ class TestSmokeBaseline:
         assert "context_recall" not in metrics
 
 
+def _mock_ollama_smoke(embedding: list[float]):
+    mock_cls = MagicMock()
+    mock_cls.return_value.embed_query.return_value = embedding
+    return patch("run_eval.OllamaEmbeddings", mock_cls)
+
+
 class TestSmokeRagEval:
     def test_rag_eval_produces_one_result_per_pair(self):
         conn = _mock_conn(_RETRIEVED_CONTEXTS)
         with (
             patch("run_eval.call_query_endpoint", side_effect=_RAG_ANSWERS),
-            patch("run_eval.embed_query", return_value=[0.1, 0.2, 0.3]),
+            _mock_ollama_smoke([0.1, 0.2, 0.3]),
         ):
             results = run_rag_eval(
                 FIXTURE_DATASET,
                 conn,
-                backend_url="http://localhost:8000",
+                backend_url="http://localhost:3001",
                 ollama_url="http://localhost:11434",
             )
         assert len(results) == len(FIXTURE_DATASET)
@@ -176,12 +182,12 @@ class TestSmokeRagEval:
         conn = _mock_conn(_RETRIEVED_CONTEXTS)
         with (
             patch("run_eval.call_query_endpoint", side_effect=_RAG_ANSWERS),
-            patch("run_eval.embed_query", return_value=[0.1, 0.2, 0.3]),
+            _mock_ollama_smoke([0.1, 0.2, 0.3]),
         ):
             results = run_rag_eval(
                 FIXTURE_DATASET,
                 conn,
-                backend_url="http://localhost:8000",
+                backend_url="http://localhost:3001",
                 ollama_url="http://localhost:11434",
             )
         for r in results:

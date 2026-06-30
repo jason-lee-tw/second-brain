@@ -93,6 +93,12 @@ class TestFetchTopKChunks:
         assert 1 in call_args[0][1]
 
 
+def _mock_ollama(embedding: list[float]):
+    mock_cls = MagicMock()
+    mock_cls.return_value.embed_query.return_value = embedding
+    return patch("run_eval.OllamaEmbeddings", mock_cls)
+
+
 class TestRunRagEval:
     def test_returns_one_result_per_pair(self):
         pairs = [_pair("Q1?", "A1."), _pair("Q2?", "A2.")]
@@ -102,7 +108,7 @@ class TestRunRagEval:
                 "run_eval.call_query_endpoint",
                 side_effect=["Generated A1.", "Generated A2."],
             ),
-            patch("run_eval.embed_query", return_value=[0.1, 0.2, 0.3]),
+            _mock_ollama([0.1, 0.2, 0.3]),
             patch("run_eval.fetch_top_k_chunks", return_value=["ctx chunk"]),
         ):
             results = run_rag_eval(
@@ -119,7 +125,7 @@ class TestRunRagEval:
 
         with (
             patch("run_eval.call_query_endpoint", return_value="Answer."),
-            patch("run_eval.embed_query", return_value=[0.1]),
+            _mock_ollama([0.1]),
             patch(
                 "run_eval.fetch_top_k_chunks",
                 return_value=["context 1", "context 2"],
@@ -139,7 +145,7 @@ class TestRunRagEval:
 
         with (
             patch("run_eval.call_query_endpoint", return_value="A."),
-            patch("run_eval.embed_query", return_value=[0.1]),
+            _mock_ollama([0.1]),
             patch("run_eval.fetch_top_k_chunks", return_value=["ctx"]),
         ):
             results = run_rag_eval(
