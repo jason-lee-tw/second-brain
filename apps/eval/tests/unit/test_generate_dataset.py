@@ -20,6 +20,11 @@ class TestStripCodeFences:
         result = _strip_code_fences(text)
         assert result.strip() == '[{"question": "Q?"}]'
 
+    def test_strips_fence_with_trailing_prose(self):
+        text = '```json\n[{"question": "Q?"}]\n```\n\nHope this helps!'
+        result = _strip_code_fences(text)
+        assert json.loads(result.strip()) == [{"question": "Q?"}]
+
 
 class TestGenerateQAPairsForDocument:
     def _make_doc(self) -> dict:
@@ -115,3 +120,12 @@ class TestGenerateQAPairsForDocument:
         client = self._make_client(raw)
         pairs = generate_qa_pairs_for_document(client, self._make_doc(), n=1)
         uuid.UUID(pairs[0]["id"])  # raises if invalid
+
+    def test_json_object_return_wrapped_as_single_item_list(self):
+        raw = json.dumps(
+            {"question": "Q?", "expected_answer": "A.", "difficulty": "easy"}
+        )
+        client = self._make_client(raw)
+        pairs = generate_qa_pairs_for_document(client, self._make_doc(), n=1)
+        assert len(pairs) == 1
+        assert pairs[0]["question"] == "Q?"

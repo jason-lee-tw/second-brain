@@ -6,6 +6,7 @@ Call /query endpoint, fetch retrieved contexts, run RAGAS.
 
 import argparse
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -113,11 +114,16 @@ def compute_rag_metrics(results: list[dict]) -> dict:
         ],
     )
     df = result.to_pandas()
+
+    def _safe(col: str) -> float | None:
+        v = float(df[col].mean())
+        return None if math.isnan(v) else round(v, 4)
+
     return {
-        "context_recall": round(float(df["context_recall"].mean()), 4),
-        "context_precision": round(float(df["context_precision"].mean()), 4),
-        "faithfulness": round(float(df["faithfulness"].mean()), 4),
-        "answer_relevancy": round(float(df["answer_relevancy"].mean()), 4),
+        "context_recall": _safe("context_recall"),
+        "context_precision": _safe("context_precision"),
+        "faithfulness": _safe("faithfulness"),
+        "answer_relevancy": _safe("answer_relevancy"),
     }
 
 

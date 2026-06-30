@@ -213,3 +213,30 @@ class TestComputeRagMetrics:
             metrics = compute_rag_metrics(results)
 
         assert metrics["context_recall"] == round(0.801234567, 4)
+
+    def test_nan_metric_returns_none(self):
+        results = [
+            {
+                "question": "Q?",
+                "generated_answer": "A.",
+                "expected_answer": "A.",
+                "retrieved_contexts": ["ctx"],
+            }
+        ]
+        mock_result = _mock_ragas_result(
+            {
+                "context_recall": float("nan"),
+                "context_precision": 0.75,
+                "faithfulness": 0.90,
+                "answer_relevancy": 0.85,
+            }
+        )
+        with (
+            patch("run_eval.evaluate", return_value=mock_result),
+            patch("run_eval.ChatAnthropic"),
+            patch("run_eval.LangchainLLMWrapper"),
+        ):
+            metrics = compute_rag_metrics(results)
+
+        assert metrics["context_recall"] is None
+        assert metrics["faithfulness"] == 0.9

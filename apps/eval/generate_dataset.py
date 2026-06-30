@@ -28,13 +28,18 @@ Document: {content}"""
 
 
 def _strip_code_fences(text: str) -> str:
-    """Remove leading/trailing markdown code fences (```json ... ``` or ``` ... ```)."""
+    """Remove markdown code fences, stripping any trailing prose after closing fence."""
     stripped = text.strip()
-    if stripped.startswith("```"):
-        lines = stripped.splitlines()
-        inner_lines = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
-        return "\n".join(inner_lines)
-    return text
+    if not stripped.startswith("```"):
+        return text
+    lines = stripped.splitlines()
+    start = 1
+    end = len(lines)
+    for i in range(len(lines) - 1, 0, -1):
+        if lines[i].strip() == "```":
+            end = i
+            break
+    return "\n".join(lines[start:end])
 
 
 def generate_qa_pairs_for_document(
@@ -48,7 +53,11 @@ def generate_qa_pairs_for_document(
         messages=[{"role": "user", "content": prompt}],
     )
     raw_text = _strip_code_fences(message.content[0].text)
-    pairs_raw: list[dict] = json.loads(raw_text)
+    pairs_raw = json.loads(raw_text)
+    if isinstance(pairs_raw, dict):
+        pairs_raw = [pairs_raw]
+    if not isinstance(pairs_raw, list):
+        return []
     return [
         {
             "id": str(uuid.uuid4()),
@@ -100,17 +109,25 @@ def main() -> None:
         print("No processed documents found. Run ingestion first.")
         return
 
-    all_pairs: list[dict] = []
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Resume support: load existing pairs if output already exists
+    if output_path.exists():
+        with open(output_path) as f:
+            all_pairs: list[dict] = json.load(f)
+        print(f"Resuming: {len(all_pairs)} pairs already saved.")
+    else:
+        all_pairs = []
+
     for doc in documents:
         print(f"Generating {args.n_per_doc} Q&A pairs for: {doc['filename']}")
         pairs = generate_qa_pairs_for_document(client, doc, n=args.n_per_doc)
         all_pairs.extend(pairs)
-        print(f"  -> {len(pairs)} pairs generated.")
-
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(all_pairs, f, indent=2)
+        # Incremental save so a mid-run crash doesn't lose generated pairs
+        with open(output_path, "w") as f:
+            json.dump(all_pairs, f, indent=2)
+        print(f"  -> {len(pairs)} pairs generated. ({len(all_pairs)} total saved)")
 
     print(f"\nTotal: {len(all_pairs)} raw Q&A pairs saved to {output_path}")
     print("Next: review, curate 30-50 pairs, save as dataset/qa_pairs.json")

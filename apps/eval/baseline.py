@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 
@@ -67,9 +68,14 @@ def compute_baseline_metrics(results: list[dict]) -> dict:
         metrics=[Faithfulness(llm=llm), AnswerRelevancy(llm=llm)],
     )
     df = result.to_pandas()
+
+    def _safe(col: str) -> float | None:
+        v = float(df[col].mean())
+        return None if math.isnan(v) else round(v, 4)
+
     return {
-        "faithfulness": round(float(df["faithfulness"].mean()), 4),
-        "answer_relevancy": round(float(df["answer_relevancy"].mean()), 4),
+        "faithfulness": _safe("faithfulness"),
+        "answer_relevancy": _safe("answer_relevancy"),
     }
 
 

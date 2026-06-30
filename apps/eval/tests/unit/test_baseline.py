@@ -133,3 +133,21 @@ class TestComputeBaselineMetrics:
 
         assert "context_recall" not in metrics
         assert "context_precision" not in metrics
+
+    def test_nan_metric_returns_none(self):
+        results = [
+            {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
+        ]
+        mock_result = _mock_ragas_result(
+            {"faithfulness": float("nan"), "answer_relevancy": 0.80}
+        )
+
+        with (
+            patch("baseline.evaluate", return_value=mock_result),
+            patch("baseline.ChatAnthropic"),
+            patch("baseline.LangchainLLMWrapper"),
+        ):
+            metrics = compute_baseline_metrics(results)
+
+        assert metrics["faithfulness"] is None
+        assert metrics["answer_relevancy"] == 0.8

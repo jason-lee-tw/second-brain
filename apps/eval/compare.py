@@ -45,6 +45,13 @@ def build_report(baseline_metrics: dict, rag_metrics: dict) -> str:
     for metric, b_str, r_str, d_str in rows:
         lines.append(f"| {metric:<19} | {b_str:<14} | {r_str:<12} | {d_str:<7} |")
 
+    lines += [
+        "",
+        "> **Note:** Baseline metrics use `expected_answer` as proxy retrieved context",
+        "> (no retrieval). They measure consistency with ground truth, not document",
+        "> grounding. Compare with RAG values to assess the retrieval benefit.",
+    ]
+
     return "\n".join(lines) + "\n"
 
 
