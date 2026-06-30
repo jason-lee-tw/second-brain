@@ -1,0 +1,11 @@
+{
+  "task_id": "task-1-dependencies-config-and-directory-scaffold",
+  "plan": "docs/superpowers/plans/2026-06-16-ticket-6-evaluation.md",
+  "spec": "docs/superpowers/specs/2026-06-16-second-brain-design.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-1-dependencies-config-and-directory-scaffold",
+  "completed_steps": [
+    "tdd-loop-complete"
+  ]
+}
