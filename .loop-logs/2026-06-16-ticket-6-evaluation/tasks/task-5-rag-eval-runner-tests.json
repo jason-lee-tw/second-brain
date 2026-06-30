@@ -2,8 +2,10 @@
   "task_id": "task-5-rag-eval-runner-tests",
   "plan": "docs/superpowers/plans/2026-06-16-ticket-6-evaluation.md",
   "spec": "docs/superpowers/specs/2026-06-16-second-brain-design.md",
-  "status": "in_progress",
-  "attempt": 0,
+  "status": "completed",
+  "attempt": 1,
   "worktree": ".worktrees/task-5-rag-eval-runner-tests",
-  "completed_steps": []
+  "completed_steps": [
+    "tdd-loop-complete"
+  ]
 }
