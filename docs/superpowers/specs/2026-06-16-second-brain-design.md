@@ -522,7 +522,7 @@ Offline / on-demand via a script. Not part of CI.
 | AC-6  | PII in `final_answer` is redacted before being persisted to `chat_history`                                                                                                       |
 | AC-7  | A file in `temp/pending-digest-docs/` that fails ingestion is retried up to 3 times; on 3rd failure it moves to `temp/failed/`                                                   |
 | AC-8  | A file already present in `ingested_documents` (matching content hash) is skipped on re-ingestion                                                                                |
-| AC-9  | RAGAS `context_recall` and `answer_faithfulness` for the full RAG pipeline are measurably higher than the no-RAG baseline on the curated eval dataset                            |
+| AC-9  | RAGAS `context_recall` and `faithfulness` for the full RAG pipeline are measurably higher than the no-RAG baseline on the curated eval dataset                            |
 | AC-10 | `/query` with a new `sessionId=null` creates a new LangGraph thread; subsequent requests with the returned UUID7 continue the same thread                                        |
 
 ---
