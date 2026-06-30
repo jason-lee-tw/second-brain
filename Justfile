@@ -129,7 +129,7 @@ check-implementation-backend:
   @just format lint type-check test-unit test-integration
 
 
-_eval-env := if path_exists("apps/eval/.env") == "true" { "--env-file apps/eval/.env" } else { "" }
+_eval-env := if path_exists("apps/eval/.env") == "true" { "--env-file " + justfile_directory() + "/apps/eval/.env" } else { "" }
 
 # Generate raw Q&A pairs from ingested documents (requires running backend + DB)
 [group: "LLM Evaluation"]
