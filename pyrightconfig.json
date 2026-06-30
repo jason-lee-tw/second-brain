@@ -1,7 +1,7 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "extraPaths": ["apps/backend/src"],
+  "extraPaths": ["apps/backend/src", "apps/eval"],
   // pgvector, asyncpg, tavily-python, tiktoken, presidio-*, arize-phoenix-otel, psycopg-pool
   // all ship without stubs or py.typed; remove when all have stubs installed
   "reportMissingTypeStubs": "none",

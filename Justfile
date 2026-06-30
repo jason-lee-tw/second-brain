@@ -111,6 +111,12 @@ test-integration:
   @uv run --package second-brain pytest apps/backend/tests/integration
 
 
+# Eval harness unit tests
+[group: "Test"]
+test-eval:
+  @uv run --directory apps/eval pytest tests/unit
+
+
 # Run all backend tests
 [group: "Test"]
 test:
