@@ -9,7 +9,14 @@ Measures RAG improvement over a no-RAG baseline using [RAGAS](https://docs.ragas
 just test-eval
 ```
 
-For a full live evaluation you need the stack running (`just up-all`) and these env vars set:
+For a full live evaluation you need the stack running (`just up-all`) and an env file:
+
+```bash
+cp apps/eval/.env.template apps/eval/.env
+# fill in ANTHROPIC_API_KEY (and adjust other values if needed)
+```
+
+The `just eval-*` recipes load `apps/eval/.env` automatically when it exists. You can also export the vars manually:
 
 ```bash
 export DATABASE_URL="postgresql://second_brain:secret@localhost:5432/second_brain"
