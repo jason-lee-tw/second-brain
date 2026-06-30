@@ -21,8 +21,8 @@ from ragas.metrics import AnswerRelevancy, ContextPrecision, ContextRecall, Fait
 from schema import validate_dataset
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-_BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
-_DB_URL = re.sub(r"\+[^:/]+", "", os.environ.get("DATABASE_URL", ""))
+_BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:3001")
+_DB_URL = re.sub(r"\+[^:]+(?=://)", "", os.environ.get("DATABASE_URL", ""))
 _OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 _EMBEDDING_MODEL = "qwen3-embedding:0.6b"
 _TOP_K = 5

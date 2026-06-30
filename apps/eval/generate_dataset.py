@@ -12,7 +12,7 @@ import anthropic
 import psycopg
 from psycopg.rows import dict_row
 
-_DB_URL = re.sub(r"\+[^:/]+", "", os.environ.get("DATABASE_URL", ""))
+_DB_URL = re.sub(r"\+[^:]+(?=://)", "", os.environ.get("DATABASE_URL", ""))
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 _GENERATION_PROMPT = """\

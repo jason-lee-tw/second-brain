@@ -43,7 +43,7 @@ class TestCallQueryEndpoint:
         }
         with patch("run_eval.httpx.post", return_value=mock_response):
             answer = call_query_endpoint(
-                "What is RAG?", backend_url="http://localhost:8000"
+                "What is RAG?", backend_url="http://localhost:3001"
             )
         assert answer == "RAG stands for Retrieval-Augmented Generation."
 
@@ -54,7 +54,7 @@ class TestCallQueryEndpoint:
         )
         with patch("run_eval.httpx.post", return_value=mock_response):
             with pytest.raises(Exception, match="500"):
-                call_query_endpoint("Q?", backend_url="http://localhost:8000")
+                call_query_endpoint("Q?", backend_url="http://localhost:3001")
 
 
 class TestEmbedQuery:
@@ -108,7 +108,7 @@ class TestRunRagEval:
             results = run_rag_eval(
                 pairs,
                 conn=MagicMock(),
-                backend_url="http://localhost:8000",
+                backend_url="http://localhost:3001",
                 ollama_url="http://localhost:11434",
             )
 
@@ -128,7 +128,7 @@ class TestRunRagEval:
             results = run_rag_eval(
                 pairs,
                 conn=MagicMock(),
-                backend_url="http://localhost:8000",
+                backend_url="http://localhost:3001",
                 ollama_url="http://localhost:11434",
             )
 
@@ -145,7 +145,7 @@ class TestRunRagEval:
             results = run_rag_eval(
                 pairs,
                 conn=MagicMock(),
-                backend_url="http://localhost:8000",
+                backend_url="http://localhost:3001",
                 ollama_url="http://localhost:11434",
             )
 
