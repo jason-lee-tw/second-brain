@@ -3192,7 +3192,11 @@ name = "second-brain-eval"
 version = "0.1.0"
 source = { virtual = "apps/eval" }
 dependencies = [
+    { name = "anthropic" },
+    { name = "httpx" },
+    { name = "langchain-anthropic" },
     { name = "langchain-ollama" },
+    { name = "pandas" },
     { name = "psycopg", extra = ["binary"] },
     { name = "ragas" },
     { name = "second-brain" },
@@ -3205,7 +3209,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=0.40.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "langchain-anthropic", specifier = ">=0.3.0" },
     { name = "langchain-ollama", specifier = ">=0.3.0" },
+    { name = "pandas", specifier = ">=2.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.1.0" },
     { name = "ragas", specifier = ">=0.2.0,<0.5" },
     { name = "second-brain", editable = "apps/backend" },
