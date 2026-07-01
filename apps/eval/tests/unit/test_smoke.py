@@ -6,12 +6,13 @@ are mocked so this test runs offline with no infrastructure.
 """
 
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
 from baseline import compute_baseline_metrics, run_baseline
 from compare import build_report
+from ragas.metrics.result import MetricResult
 from run_eval import compute_rag_metrics, run_rag_eval
 from schema import validate_dataset
 
@@ -113,6 +114,12 @@ def _mock_ragas_result(scores: dict) -> MagicMock:
     return mock
 
 
+def _mock_metric(value: float) -> MagicMock:
+    metric = MagicMock()
+    metric.ascore = AsyncMock(return_value=MetricResult(value=value))
+    return metric
+
+
 class TestSmokeSchemaValidation:
     def test_fixture_dataset_passes_validation(self):
         validate_dataset(FIXTURE_DATASET)
@@ -145,11 +152,17 @@ class TestSmokeBaseline:
             }
             for p, a in zip(FIXTURE_DATASET, _BASELINE_ANSWERS)
         ]
-        mock_result = _mock_ragas_result(_BASELINE_METRICS)
         with (
-            patch("baseline.evaluate", return_value=mock_result),
-            patch("baseline.ChatAnthropic"),
-            patch("baseline.LangchainLLMWrapper"),
+            patch("baseline.build_llm"),
+            patch("baseline.build_embeddings"),
+            patch(
+                "baseline.Faithfulness",
+                return_value=_mock_metric(_BASELINE_METRICS["faithfulness"]),
+            ),
+            patch(
+                "baseline.AnswerRelevancy",
+                return_value=_mock_metric(_BASELINE_METRICS["answer_relevancy"]),
+            ),
         ):
             metrics = compute_baseline_metrics(results)
         assert "faithfulness" in metrics

@@ -2,16 +2,14 @@
 """No-RAG baseline: answer questions using Claude with no retrieval context."""
 
 import argparse
+import asyncio
 import json
-import math
 import os
 from pathlib import Path
 
 import anthropic
-from langchain_anthropic import ChatAnthropic
-from ragas import EvaluationDataset, SingleTurnSample, evaluate
-from ragas.llms import LangchainLLMWrapper
-from ragas.metrics import AnswerRelevancy, Faithfulness
+from ragas.metrics.collections import AnswerRelevancy, Faithfulness
+from ragas_client import build_embeddings, build_llm, safe_mean
 from schema import validate_dataset
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -43,40 +41,45 @@ def run_baseline(qa_pairs: list[dict], client: anthropic.Anthropic) -> list[dict
     return results
 
 
+async def _score_all(results: list[dict]) -> dict[str, list[float]]:
+    """Score every result against Faithfulness and AnswerRelevancy, one sample
+    at a time."""
+    llm = build_llm()
+    embeddings = build_embeddings()
+    faithfulness = Faithfulness(llm=llm)
+    answer_relevancy = AnswerRelevancy(llm=llm, embeddings=embeddings)
+
+    faithfulness_scores: list[float] = []
+    relevancy_scores: list[float] = []
+    for r in results:
+        try:
+            score = await faithfulness.ascore(
+                user_input=r["question"],
+                response=r["generated_answer"],
+                # ponytail: proxy for no-retrieval baseline
+                retrieved_contexts=[r["expected_answer"]],
+            )
+            faithfulness_scores.append(score.value)
+        except Exception:
+            faithfulness_scores.append(float("nan"))
+        try:
+            score = await answer_relevancy.ascore(
+                user_input=r["question"], response=r["generated_answer"]
+            )
+            relevancy_scores.append(score.value)
+        except Exception:
+            relevancy_scores.append(float("nan"))
+    return {"faithfulness": faithfulness_scores, "answer_relevancy": relevancy_scores}
+
+
 def compute_baseline_metrics(results: list[dict]) -> dict:
     """Run RAGAS faithfulness and answer_relevancy on baseline results.
 
     Uses expected_answer as proxy retrieved_contexts — measures whether the
     model's no-RAG answer is consistent with ground truth (baseline for comparison).
     """
-    samples = [
-        SingleTurnSample(
-            user_input=r["question"],
-            response=r["generated_answer"],
-            # ponytail: proxy for no-retrieval baseline
-            retrieved_contexts=[r["expected_answer"]],
-            reference=r["expected_answer"],
-        )
-        for r in results
-    ]
-    dataset = EvaluationDataset(samples=samples)
-    llm = LangchainLLMWrapper(
-        ChatAnthropic(model="claude-sonnet-4-6", api_key=ANTHROPIC_API_KEY)
-    )
-    result = evaluate(
-        dataset=dataset,
-        metrics=[Faithfulness(llm=llm), AnswerRelevancy(llm=llm)],
-    )
-    df = result.to_pandas()
-
-    def _safe(col: str) -> float | None:
-        v = float(df[col].mean())
-        return None if math.isnan(v) else round(v, 4)
-
-    return {
-        "faithfulness": _safe("faithfulness"),
-        "answer_relevancy": _safe("answer_relevancy"),
-    }
+    scores = asyncio.run(_score_all(results))
+    return {name: safe_mean(values) for name, values in scores.items()}
 
 
 def main() -> None:

@@ -1,8 +1,8 @@
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 from baseline import compute_baseline_metrics, run_baseline
+from ragas.metrics.result import MetricResult
 
 
 def _make_qa_pairs() -> list[dict]:
@@ -28,10 +28,10 @@ def _make_qa_pairs() -> list[dict]:
     ]
 
 
-def _mock_ragas_result(scores: dict) -> MagicMock:
-    mock = MagicMock()
-    mock.to_pandas.return_value = pd.DataFrame([scores])
-    return mock
+def _mock_metric(value: float) -> MagicMock:
+    metric = MagicMock()
+    metric.ascore = AsyncMock(return_value=MetricResult(value=value))
+    return metric
 
 
 class TestRunBaseline:
@@ -83,32 +83,25 @@ class TestComputeBaselineMetrics:
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."},
         ]
-        mock_result = _mock_ragas_result(
-            {"faithfulness": 0.85, "answer_relevancy": 0.90}
-        )
-
         with (
-            patch("baseline.evaluate", return_value=mock_result),
-            patch("baseline.ChatAnthropic"),
-            patch("baseline.LangchainLLMWrapper"),
+            patch("baseline.build_llm"),
+            patch("baseline.build_embeddings"),
+            patch("baseline.Faithfulness", return_value=_mock_metric(0.85)),
+            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.90)),
         ):
             metrics = compute_baseline_metrics(results)
 
-        assert "faithfulness" in metrics
-        assert "answer_relevancy" in metrics
+        assert metrics == {"faithfulness": 0.85, "answer_relevancy": 0.9}
 
     def test_metrics_are_rounded_to_4_decimal_places(self):
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
         ]
-        mock_result = _mock_ragas_result(
-            {"faithfulness": 0.856789123, "answer_relevancy": 0.901234567}
-        )
-
         with (
-            patch("baseline.evaluate", return_value=mock_result),
-            patch("baseline.ChatAnthropic"),
-            patch("baseline.LangchainLLMWrapper"),
+            patch("baseline.build_llm"),
+            patch("baseline.build_embeddings"),
+            patch("baseline.Faithfulness", return_value=_mock_metric(0.856789123)),
+            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.901234567)),
         ):
             metrics = compute_baseline_metrics(results)
 
@@ -120,14 +113,11 @@ class TestComputeBaselineMetrics:
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
         ]
-        mock_result = _mock_ragas_result(
-            {"faithfulness": 0.80, "answer_relevancy": 0.75}
-        )
-
         with (
-            patch("baseline.evaluate", return_value=mock_result),
-            patch("baseline.ChatAnthropic"),
-            patch("baseline.LangchainLLMWrapper"),
+            patch("baseline.build_llm"),
+            patch("baseline.build_embeddings"),
+            patch("baseline.Faithfulness", return_value=_mock_metric(0.80)),
+            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.75)),
         ):
             metrics = compute_baseline_metrics(results)
 
@@ -138,16 +128,35 @@ class TestComputeBaselineMetrics:
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
         ]
-        mock_result = _mock_ragas_result(
-            {"faithfulness": float("nan"), "answer_relevancy": 0.80}
-        )
-
         with (
-            patch("baseline.evaluate", return_value=mock_result),
-            patch("baseline.ChatAnthropic"),
-            patch("baseline.LangchainLLMWrapper"),
+            patch("baseline.build_llm"),
+            patch("baseline.build_embeddings"),
+            patch("baseline.Faithfulness", return_value=_mock_metric(float("nan"))),
+            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.80)),
         ):
             metrics = compute_baseline_metrics(results)
 
         assert metrics["faithfulness"] is None
+        assert metrics["answer_relevancy"] == 0.8
+
+    def test_metric_exception_for_one_sample_does_not_lose_others(self):
+        """A failing .ascore() call becomes NaN and is excluded from the mean,
+        matching the old evaluate(raise_exceptions=False) behavior."""
+        results = [
+            {"question": "Q1?", "generated_answer": "A1.", "expected_answer": "A1."},
+            {"question": "Q2?", "generated_answer": "A2.", "expected_answer": "A2."},
+        ]
+        faithfulness_metric = MagicMock()
+        faithfulness_metric.ascore = AsyncMock(
+            side_effect=[RuntimeError("LLM timeout"), MetricResult(value=0.9)]
+        )
+        with (
+            patch("baseline.build_llm"),
+            patch("baseline.build_embeddings"),
+            patch("baseline.Faithfulness", return_value=faithfulness_metric),
+            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.8)),
+        ):
+            metrics = compute_baseline_metrics(results)
+
+        assert metrics["faithfulness"] == 0.9
         assert metrics["answer_relevancy"] == 0.8
