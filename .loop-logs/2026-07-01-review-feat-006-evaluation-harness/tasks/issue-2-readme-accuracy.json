@@ -1,0 +1,1 @@
+{"issue_id":"issue-2-readme-accuracy","status":"completed","attempt":1,"worktree":null,"severity":"minor","commit":"0ef1455","summary":"Dropped stale hardcoded test count and added missing ragas_client.py row to README file layout"}
