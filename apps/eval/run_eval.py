@@ -5,23 +5,25 @@ Call /query endpoint, fetch retrieved contexts, run RAGAS.
 """
 
 import argparse
+import asyncio
 import json
-import math
 import os
 import re
 from pathlib import Path
 
 import httpx
 import psycopg
-from langchain_anthropic import ChatAnthropic
 from langchain_ollama import OllamaEmbeddings
 from psycopg.rows import dict_row
-from ragas import EvaluationDataset, SingleTurnSample, evaluate
-from ragas.llms import LangchainLLMWrapper
-from ragas.metrics import AnswerRelevancy, ContextPrecision, ContextRecall, Faithfulness
+from ragas.metrics.collections import (
+    AnswerRelevancy,
+    ContextPrecision,
+    ContextRecall,
+    Faithfulness,
+)
+from ragas_client import build_embeddings, build_llm, safe_mean
 from schema import validate_dataset
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 _BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:3001")
 _DB_URL = re.sub(r"\+[^:]+(?=://)", "", os.environ.get("DATABASE_URL", ""))
 _OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
@@ -90,42 +92,63 @@ def run_rag_eval(
     return results
 
 
+async def _score_all(results: list[dict]) -> dict[str, list[float]]:
+    """Score every result against all four RAGAS metrics, one sample at a time."""
+    llm = build_llm()
+    embeddings = build_embeddings()
+    context_recall = ContextRecall(llm=llm)
+    context_precision = ContextPrecision(llm=llm)
+    faithfulness = Faithfulness(llm=llm)
+    answer_relevancy = AnswerRelevancy(llm=llm, embeddings=embeddings)
+
+    scores: dict[str, list[float]] = {
+        "context_recall": [],
+        "context_precision": [],
+        "faithfulness": [],
+        "answer_relevancy": [],
+    }
+    for r in results:
+        try:
+            score = await context_recall.ascore(
+                user_input=r["question"],
+                retrieved_contexts=r["retrieved_contexts"],
+                reference=r["expected_answer"],
+            )
+            scores["context_recall"].append(score.value)
+        except Exception:
+            scores["context_recall"].append(float("nan"))
+        try:
+            score = await context_precision.ascore(
+                user_input=r["question"],
+                reference=r["expected_answer"],
+                retrieved_contexts=r["retrieved_contexts"],
+            )
+            scores["context_precision"].append(score.value)
+        except Exception:
+            scores["context_precision"].append(float("nan"))
+        try:
+            score = await faithfulness.ascore(
+                user_input=r["question"],
+                response=r["generated_answer"],
+                retrieved_contexts=r["retrieved_contexts"],
+            )
+            scores["faithfulness"].append(score.value)
+        except Exception:
+            scores["faithfulness"].append(float("nan"))
+        try:
+            score = await answer_relevancy.ascore(
+                user_input=r["question"], response=r["generated_answer"]
+            )
+            scores["answer_relevancy"].append(score.value)
+        except Exception:
+            scores["answer_relevancy"].append(float("nan"))
+    return scores
+
+
 def compute_rag_metrics(results: list[dict]) -> dict:
     """Run all four RAGAS metrics on RAG pipeline results."""
-    samples = [
-        SingleTurnSample(
-            user_input=r["question"],
-            response=r["generated_answer"],
-            retrieved_contexts=r["retrieved_contexts"],
-            reference=r["expected_answer"],
-        )
-        for r in results
-    ]
-    dataset = EvaluationDataset(samples=samples)
-    llm = LangchainLLMWrapper(
-        ChatAnthropic(model="claude-sonnet-4-6", api_key=ANTHROPIC_API_KEY)
-    )
-    result = evaluate(
-        dataset=dataset,
-        metrics=[
-            ContextRecall(llm=llm),
-            ContextPrecision(llm=llm),
-            Faithfulness(llm=llm),
-            AnswerRelevancy(llm=llm),
-        ],
-    )
-    df = result.to_pandas()
-
-    def _safe(col: str) -> float | None:
-        v = float(df[col].mean())
-        return None if math.isnan(v) else round(v, 4)
-
-    return {
-        "context_recall": _safe("context_recall"),
-        "context_precision": _safe("context_precision"),
-        "faithfulness": _safe("faithfulness"),
-        "answer_relevancy": _safe("answer_relevancy"),
-    }
+    scores = asyncio.run(_score_all(results))
+    return {name: safe_mean(values) for name, values in scores.items()}
 
 
 def main() -> None:

@@ -8,7 +8,6 @@ are mocked so this test runs offline with no infrastructure.
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 import pytest
 from baseline import compute_baseline_metrics, run_baseline
 from compare import build_report
@@ -106,12 +105,6 @@ def _mock_conn(contexts_by_call: list[list[str]]) -> MagicMock:
         cursors.append(cur)
     conn.cursor.side_effect = cursors
     return conn
-
-
-def _mock_ragas_result(scores: dict) -> MagicMock:
-    mock = MagicMock()
-    mock.to_pandas.return_value = pd.DataFrame([scores])
-    return mock
 
 
 def _mock_metric(value: float) -> MagicMock:
@@ -217,11 +210,25 @@ class TestSmokeRagEval:
             }
             for p, a, ctx in zip(FIXTURE_DATASET, _RAG_ANSWERS, _RETRIEVED_CONTEXTS)
         ]
-        mock_result = _mock_ragas_result(_RAG_METRICS)
         with (
-            patch("run_eval.evaluate", return_value=mock_result),
-            patch("run_eval.ChatAnthropic"),
-            patch("run_eval.LangchainLLMWrapper"),
+            patch("run_eval.build_llm"),
+            patch("run_eval.build_embeddings"),
+            patch(
+                "run_eval.ContextRecall",
+                return_value=_mock_metric(_RAG_METRICS["context_recall"]),
+            ),
+            patch(
+                "run_eval.ContextPrecision",
+                return_value=_mock_metric(_RAG_METRICS["context_precision"]),
+            ),
+            patch(
+                "run_eval.Faithfulness",
+                return_value=_mock_metric(_RAG_METRICS["faithfulness"]),
+            ),
+            patch(
+                "run_eval.AnswerRelevancy",
+                return_value=_mock_metric(_RAG_METRICS["answer_relevancy"]),
+            ),
         ):
             metrics = compute_rag_metrics(results)
         assert set(metrics.keys()) == {

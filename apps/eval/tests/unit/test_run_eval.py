@@ -1,8 +1,8 @@
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 import pytest
+from ragas.metrics.result import MetricResult
 from run_eval import (
     call_query_endpoint,
     compute_rag_metrics,
@@ -23,10 +23,10 @@ def _pair(question: str = "What is RAG?", expected: str = "RAG is cool.") -> dic
     }
 
 
-def _mock_ragas_result(scores: dict) -> MagicMock:
-    mock = MagicMock()
-    mock.to_pandas.return_value = pd.DataFrame([scores])
-    return mock
+def _mock_metric(value: float) -> MagicMock:
+    metric = MagicMock()
+    metric.ascore = AsyncMock(return_value=MetricResult(value=value))
+    return metric
 
 
 class TestCallQueryEndpoint:
@@ -172,26 +172,21 @@ class TestComputeRagMetrics:
                 "retrieved_contexts": ["ctx"],
             }
         ]
-        mock_result = _mock_ragas_result(
-            {
-                "context_recall": 0.80,
-                "context_precision": 0.75,
-                "faithfulness": 0.90,
-                "answer_relevancy": 0.85,
-            }
-        )
         with (
-            patch("run_eval.evaluate", return_value=mock_result),
-            patch("run_eval.ChatAnthropic"),
-            patch("run_eval.LangchainLLMWrapper"),
+            patch("run_eval.build_llm"),
+            patch("run_eval.build_embeddings"),
+            patch("run_eval.ContextRecall", return_value=_mock_metric(0.80)),
+            patch("run_eval.ContextPrecision", return_value=_mock_metric(0.75)),
+            patch("run_eval.Faithfulness", return_value=_mock_metric(0.90)),
+            patch("run_eval.AnswerRelevancy", return_value=_mock_metric(0.85)),
         ):
             metrics = compute_rag_metrics(results)
 
-        assert set(metrics.keys()) == {
-            "context_recall",
-            "context_precision",
-            "faithfulness",
-            "answer_relevancy",
+        assert metrics == {
+            "context_recall": 0.8,
+            "context_precision": 0.75,
+            "faithfulness": 0.9,
+            "answer_relevancy": 0.85,
         }
 
     def test_metrics_are_rounded_to_4_decimal_places(self):
@@ -203,18 +198,13 @@ class TestComputeRagMetrics:
                 "retrieved_contexts": ["ctx"],
             }
         ]
-        mock_result = _mock_ragas_result(
-            {
-                "context_recall": 0.801234567,
-                "context_precision": 0.751234567,
-                "faithfulness": 0.901234567,
-                "answer_relevancy": 0.851234567,
-            }
-        )
         with (
-            patch("run_eval.evaluate", return_value=mock_result),
-            patch("run_eval.ChatAnthropic"),
-            patch("run_eval.LangchainLLMWrapper"),
+            patch("run_eval.build_llm"),
+            patch("run_eval.build_embeddings"),
+            patch("run_eval.ContextRecall", return_value=_mock_metric(0.801234567)),
+            patch("run_eval.ContextPrecision", return_value=_mock_metric(0.751234567)),
+            patch("run_eval.Faithfulness", return_value=_mock_metric(0.901234567)),
+            patch("run_eval.AnswerRelevancy", return_value=_mock_metric(0.851234567)),
         ):
             metrics = compute_rag_metrics(results)
 
@@ -229,20 +219,48 @@ class TestComputeRagMetrics:
                 "retrieved_contexts": ["ctx"],
             }
         ]
-        mock_result = _mock_ragas_result(
-            {
-                "context_recall": float("nan"),
-                "context_precision": 0.75,
-                "faithfulness": 0.90,
-                "answer_relevancy": 0.85,
-            }
-        )
         with (
-            patch("run_eval.evaluate", return_value=mock_result),
-            patch("run_eval.ChatAnthropic"),
-            patch("run_eval.LangchainLLMWrapper"),
+            patch("run_eval.build_llm"),
+            patch("run_eval.build_embeddings"),
+            patch("run_eval.ContextRecall", return_value=_mock_metric(float("nan"))),
+            patch("run_eval.ContextPrecision", return_value=_mock_metric(0.75)),
+            patch("run_eval.Faithfulness", return_value=_mock_metric(0.90)),
+            patch("run_eval.AnswerRelevancy", return_value=_mock_metric(0.85)),
         ):
             metrics = compute_rag_metrics(results)
 
         assert metrics["context_recall"] is None
+        assert metrics["faithfulness"] == 0.9
+
+    def test_metric_exception_for_one_sample_does_not_lose_others(self):
+        """A failing .ascore() call becomes NaN and is excluded from the mean,
+        matching the old evaluate(raise_exceptions=False) behavior."""
+        results = [
+            {
+                "question": "Q1?",
+                "generated_answer": "A1.",
+                "expected_answer": "A1.",
+                "retrieved_contexts": ["ctx1"],
+            },
+            {
+                "question": "Q2?",
+                "generated_answer": "A2.",
+                "expected_answer": "A2.",
+                "retrieved_contexts": ["ctx2"],
+            },
+        ]
+        faithfulness_metric = MagicMock()
+        faithfulness_metric.ascore = AsyncMock(
+            side_effect=[RuntimeError("LLM timeout"), MetricResult(value=0.9)]
+        )
+        with (
+            patch("run_eval.build_llm"),
+            patch("run_eval.build_embeddings"),
+            patch("run_eval.ContextRecall", return_value=_mock_metric(0.8)),
+            patch("run_eval.ContextPrecision", return_value=_mock_metric(0.8)),
+            patch("run_eval.Faithfulness", return_value=faithfulness_metric),
+            patch("run_eval.AnswerRelevancy", return_value=_mock_metric(0.8)),
+        ):
+            metrics = compute_rag_metrics(results)
+
         assert metrics["faithfulness"] == 0.9
