@@ -2,12 +2,16 @@
 
 Measures RAG improvement over a no-RAG baseline using [RAGAS](https://docs.ragas.io/) 0.4.x metrics.
 
-## Quick start
+## Offine unit test
 
 ```bash
 # Offline unit tests (no infra required)
 just test-eval
 ```
+
+## Five-step evaluation pipeline
+
+### Pre-requisite
 
 For a full live evaluation you need the stack running (`just up-all`) and an env file:
 
@@ -24,8 +28,6 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 export BACKEND_URL="http://localhost:3001"
 export OLLAMA_URL="http://localhost:11434"
 ```
-
-## Five-step evaluation pipeline
 
 ### Step 1 — Generate raw Q&A pairs
 
@@ -105,9 +107,9 @@ apps/eval/
 
 ## RAGAS metrics
 
-| Metric | What it measures | Who uses it |
-|--------|-----------------|-------------|
-| `context_recall` | Ground truth covered by retrieved chunks | RAG only |
-| `context_precision` | Fraction of retrieved chunks that are relevant | RAG only |
-| `faithfulness` | Answer claims supported by retrieved context | Both |
-| `answer_relevancy` | Answer addresses the question | Both |
+| Metric              | What it measures                               | Who uses it |
+| ------------------- | ---------------------------------------------- | ----------- |
+| `context_recall`    | Ground truth covered by retrieved chunks       | RAG only    |
+| `context_precision` | Fraction of retrieved chunks that are relevant | RAG only    |
+| `faithfulness`      | Answer claims supported by retrieved context   | Both        |
+| `answer_relevancy`  | Answer addresses the question                  | Both        |
