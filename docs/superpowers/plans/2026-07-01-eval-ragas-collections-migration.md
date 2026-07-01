@@ -25,7 +25,7 @@
 - Test: `apps/eval/tests/unit/test_ragas_client.py`
 
 **Interfaces:**
-- Produces: `build_llm() -> InstructorBaseRagasLLM`, `build_embeddings() -> BaseRagasEmbedding`, `safe_mean(values: list[float]) -> float | None`, module constants `ANTHROPIC_API_KEY: str`, `OLLAMA_URL: str`, `EMBEDDING_MODEL: str = "qwen3-embedding:0.6b"`, `JUDGE_MODEL: str = "claude-sonnet-4-6"`. Tasks 2 and 3 consume all of these via `from ragas_client import build_llm, build_embeddings, safe_mean`.
+- Produces: `build_llm() -> InstructorBaseRagasLLM`, `build_embeddings() -> BaseRagasEmbedding`, `safe_mean(values: list[float]) -> float | None`, module constants `ANTHROPIC_API_KEY: str`, `OLLAMA_URL: str`, `EMBEDDING_MODEL: str = "qwen3-embedding:0.6b"`, `JUDGE_MODEL: str = "claude-sonnet-4-6"`. Tasks 2 and 3 consume all of these via `from ragas_client import build_llm, build_embeddings, safe_mean`. Also `score_or_nan(metric, **kwargs) -> float` (added later during code review, see design doc's Decisions log #10 — not part of Task 1's original scope; Tasks 2 and 3 later import it too).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -406,7 +406,7 @@ from pathlib import Path
 
 import anthropic
 from ragas.metrics.collections import AnswerRelevancy, Faithfulness
-from ragas_client import build_embeddings, build_llm, safe_mean
+from ragas_client import build_embeddings, build_llm, safe_mean, score_or_nan
 from schema import validate_dataset
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -418,7 +418,8 @@ Replace `compute_baseline_metrics` (and the `_SYSTEM_PROMPT`/`run_baseline` func
 
 ```python
 async def _score_all(results: list[dict]) -> dict[str, list[float]]:
-    """Score every result against Faithfulness and AnswerRelevancy, one sample at a time."""
+    """Score every result against Faithfulness and AnswerRelevancy, one sample
+    at a time."""
     llm = build_llm()
     embeddings = build_embeddings()
     faithfulness = Faithfulness(llm=llm)
@@ -427,23 +428,22 @@ async def _score_all(results: list[dict]) -> dict[str, list[float]]:
     faithfulness_scores: list[float] = []
     relevancy_scores: list[float] = []
     for r in results:
-        try:
-            score = await faithfulness.ascore(
+        faithfulness_scores.append(
+            await score_or_nan(
+                faithfulness,
                 user_input=r["question"],
                 response=r["generated_answer"],
                 # ponytail: proxy for no-retrieval baseline
                 retrieved_contexts=[r["expected_answer"]],
             )
-            faithfulness_scores.append(score.value)
-        except Exception:
-            faithfulness_scores.append(float("nan"))
-        try:
-            score = await answer_relevancy.ascore(
-                user_input=r["question"], response=r["generated_answer"]
+        )
+        relevancy_scores.append(
+            await score_or_nan(
+                answer_relevancy,
+                user_input=r["question"],
+                response=r["generated_answer"],
             )
-            relevancy_scores.append(score.value)
-        except Exception:
-            relevancy_scores.append(float("nan"))
+        )
     return {"faithfulness": faithfulness_scores, "answer_relevancy": relevancy_scores}
 
 
@@ -712,7 +712,7 @@ from ragas.metrics.collections import (
     ContextRecall,
     Faithfulness,
 )
-from ragas_client import build_embeddings, build_llm, safe_mean
+from ragas_client import build_embeddings, build_llm, safe_mean, score_or_nan
 from schema import validate_dataset
 
 _BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:3001")
@@ -743,40 +743,37 @@ async def _score_all(results: list[dict]) -> dict[str, list[float]]:
         "answer_relevancy": [],
     }
     for r in results:
-        try:
-            score = await context_recall.ascore(
+        scores["context_recall"].append(
+            await score_or_nan(
+                context_recall,
                 user_input=r["question"],
                 retrieved_contexts=r["retrieved_contexts"],
                 reference=r["expected_answer"],
             )
-            scores["context_recall"].append(score.value)
-        except Exception:
-            scores["context_recall"].append(float("nan"))
-        try:
-            score = await context_precision.ascore(
+        )
+        scores["context_precision"].append(
+            await score_or_nan(
+                context_precision,
                 user_input=r["question"],
                 reference=r["expected_answer"],
                 retrieved_contexts=r["retrieved_contexts"],
             )
-            scores["context_precision"].append(score.value)
-        except Exception:
-            scores["context_precision"].append(float("nan"))
-        try:
-            score = await faithfulness.ascore(
+        )
+        scores["faithfulness"].append(
+            await score_or_nan(
+                faithfulness,
                 user_input=r["question"],
                 response=r["generated_answer"],
                 retrieved_contexts=r["retrieved_contexts"],
             )
-            scores["faithfulness"].append(score.value)
-        except Exception:
-            scores["faithfulness"].append(float("nan"))
-        try:
-            score = await answer_relevancy.ascore(
-                user_input=r["question"], response=r["generated_answer"]
+        )
+        scores["answer_relevancy"].append(
+            await score_or_nan(
+                answer_relevancy,
+                user_input=r["question"],
+                response=r["generated_answer"],
             )
-            scores["answer_relevancy"].append(score.value)
-        except Exception:
-            scores["answer_relevancy"].append(float("nan"))
+        )
     return scores
 
 

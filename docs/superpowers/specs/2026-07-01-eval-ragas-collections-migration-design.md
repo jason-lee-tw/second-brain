@@ -47,6 +47,7 @@ entirely and hand-writing the scoring loop against the collections metrics' asyn
 ```python
 import math
 import os
+import sys
 
 import anthropic
 import openai
@@ -85,6 +86,20 @@ def safe_mean(values: list[float]) -> float | None:
     """Average non-NaN scores; None if every score is NaN."""
     clean = [v for v in values if not math.isnan(v)]
     return round(sum(clean) / len(clean), 4) if clean else None
+
+
+async def score_or_nan(metric, **kwargs) -> float:
+    """Score one sample; log and return NaN on failure so one bad sample
+    doesn't lose the rest."""
+    try:
+        result = await metric.ascore(**kwargs)
+        return result.value
+    except Exception as e:
+        print(
+            f"{type(metric).__name__} scoring failed: {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+        return float("nan")
 ```
 
 - `build_llm()` uses `ragas.llms.base.llm_factory`, which patches the given client with
@@ -97,6 +112,12 @@ def safe_mean(values: list[float]) -> float | None:
   `build_llm()`: collections metrics call `aembed_text()` internally. `openai` is
   already installed transitively via `ragas`/`langchain-openai` (no new dependency).
   Reuses the same model `run_eval.py` already runs locally for retrieval.
+- `score_or_nan(metric, **kwargs) -> float` centralizes the per-sample scoring
+  try/except: awaits `metric.ascore(**kwargs)` and returns `.value`, or logs the
+  failure to stderr (metric class name + exception type/message) and returns
+  `float("nan")` on any exception. Added during code review to replace 6 duplicated
+  inline try/except blocks across `baseline.py` and `run_eval.py` that silently
+  swallowed errors with no logging — see Decisions log #10.
 
 ### `apps/eval/baseline.py`
 
@@ -115,23 +136,22 @@ async def _score_all(results: list[dict]) -> dict[str, list[float]]:
     faithfulness_scores: list[float] = []
     relevancy_scores: list[float] = []
     for r in results:
-        try:
-            score = await faithfulness.ascore(
+        faithfulness_scores.append(
+            await ragas_client.score_or_nan(
+                faithfulness,
                 user_input=r["question"],
                 response=r["generated_answer"],
                 # ponytail: proxy for no-retrieval baseline
                 retrieved_contexts=[r["expected_answer"]],
             )
-            faithfulness_scores.append(score.value)
-        except Exception:
-            faithfulness_scores.append(float("nan"))
-        try:
-            score = await answer_relevancy.ascore(
-                user_input=r["question"], response=r["generated_answer"]
+        )
+        relevancy_scores.append(
+            await ragas_client.score_or_nan(
+                answer_relevancy,
+                user_input=r["question"],
+                response=r["generated_answer"],
             )
-            relevancy_scores.append(score.value)
-        except Exception:
-            relevancy_scores.append(float("nan"))
+        )
     return {"faithfulness": faithfulness_scores, "answer_relevancy": relevancy_scores}
 
 
@@ -167,7 +187,46 @@ async def _score_all(results: list[dict]) -> dict[str, list[float]]:
     context_precision = ContextPrecision(llm=llm)
     faithfulness = Faithfulness(llm=llm)
     answer_relevancy = AnswerRelevancy(llm=llm, embeddings=embeddings)
-    ...  # one try/except block per metric per sample, same pattern as baseline.py
+
+    scores: dict[str, list[float]] = {
+        "context_recall": [],
+        "context_precision": [],
+        "faithfulness": [],
+        "answer_relevancy": [],
+    }
+    for r in results:
+        scores["context_recall"].append(
+            await ragas_client.score_or_nan(
+                context_recall,
+                user_input=r["question"],
+                retrieved_contexts=r["retrieved_contexts"],
+                reference=r["expected_answer"],
+            )
+        )
+        scores["context_precision"].append(
+            await ragas_client.score_or_nan(
+                context_precision,
+                user_input=r["question"],
+                reference=r["expected_answer"],
+                retrieved_contexts=r["retrieved_contexts"],
+            )
+        )
+        scores["faithfulness"].append(
+            await ragas_client.score_or_nan(
+                faithfulness,
+                user_input=r["question"],
+                response=r["generated_answer"],
+                retrieved_contexts=r["retrieved_contexts"],
+            )
+        )
+        scores["answer_relevancy"].append(
+            await ragas_client.score_or_nan(
+                answer_relevancy,
+                user_input=r["question"],
+                response=r["generated_answer"],
+            )
+        )
+    return scores
 ```
 
 - `run_eval.py` keeps its own `OllamaEmbeddings` (`langchain-ollama`) for embedding the
@@ -238,3 +297,4 @@ re-verified:
 | 7 | Shared setup code (`llm_factory`/`embedding_factory`/NaN-mean)? | Extract `ragas_client.py` | Would otherwise be ~20 identical lines duplicated across two files being touched by this exact change. |
 | 8 | Sync or async ragas client? | Async (`AsyncAnthropic`/`AsyncOpenAI`) | `ragas.metrics.collections` metrics call `agenerate()`/`aembed_text()` internally; sync clients raise `TypeError`. Found during live Tier-3 verification, not anticipated in the original design. |
 | 9 | `temperature`+`top_p` both set for `claude-sonnet-4-6`? | Pop `top_p` from `llm.model_args` after `llm_factory()` returns it | Anthropic API rejects both being set simultaneously for this model (HTTP 400). `InstructorModelArgs` defaults both; no constructor-level way to omit one. Found during live Tier-3 verification. |
+| 10 | The 6 per-sample `try: ... except Exception: append(nan)` blocks (2 in `baseline.py`, 4 in `run_eval.py`) are near-identical and swallow errors with zero logging — extract now or leave duplicated? | Extract `score_or_nan(metric, **kwargs) -> float` into `ragas_client.py`, log the metric name + exception to stderr before returning NaN | Code-review finding (round 2): the duplication made every `_score_all()` harder to scan, and the silent swallowing meant a real bug (e.g. the Decisions #8/#9 failures) would show up only as an unexplained `null` metric. Fixed in commit `a0d243b`. |
