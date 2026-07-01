@@ -16,11 +16,15 @@ JUDGE_MODEL = "claude-sonnet-4-6"
 
 def build_llm():
     """Instructor-based Anthropic LLM for RAGAS collections metrics."""
-    return llm_factory(
+    llm = llm_factory(
         JUDGE_MODEL,
         provider="anthropic",
         client=anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY),
     )
+    # claude-sonnet-4-6 rejects temperature+top_p together (HTTP 400);
+    # ragas's InstructorModelArgs defaults both, so drop top_p, keep temperature.
+    llm.model_args.pop("top_p", None)
+    return llm
 
 
 def build_embeddings():

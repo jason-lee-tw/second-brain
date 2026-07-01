@@ -37,6 +37,25 @@ class TestBuildLlm:
         )
         assert result is mock_llm_factory.return_value
 
+    def test_drops_top_p_to_avoid_anthropic_400(self):
+        with (
+            patch("ragas_client.anthropic.AsyncAnthropic"),
+            patch("ragas_client.llm_factory") as mock_llm_factory,
+        ):
+            mock_llm_factory.return_value.model_args = {
+                "temperature": 0.01,
+                "top_p": 0.1,
+                "max_tokens": 1024,
+            }
+
+            result = ragas_client.build_llm()
+
+        assert "top_p" not in result.model_args
+        assert mock_llm_factory.return_value.model_args == {
+            "temperature": 0.01,
+            "max_tokens": 1024,
+        }
+
 
 class TestBuildEmbeddings:
     def test_points_openai_client_at_ollama(self):
