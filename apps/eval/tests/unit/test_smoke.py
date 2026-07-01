@@ -6,12 +6,11 @@ are mocked so this test runs offline with no infrastructure.
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from baseline import compute_baseline_metrics, run_baseline
 from compare import build_report
-from ragas.metrics.result import MetricResult
 from run_eval import compute_rag_metrics, run_rag_eval
 from schema import validate_dataset
 
@@ -107,12 +106,6 @@ def _mock_conn(contexts_by_call: list[list[str]]) -> MagicMock:
     return conn
 
 
-def _mock_metric(value: float) -> MagicMock:
-    metric = MagicMock()
-    metric.ascore = AsyncMock(return_value=MetricResult(value=value))
-    return metric
-
-
 class TestSmokeSchemaValidation:
     def test_fixture_dataset_passes_validation(self):
         validate_dataset(FIXTURE_DATASET)
@@ -136,7 +129,7 @@ class TestSmokeBaseline:
         for r in results:
             assert "retrieved_contexts" not in r
 
-    def test_baseline_metrics_contain_expected_keys(self):
+    def test_baseline_metrics_contain_expected_keys(self, mock_metric):
         results = [
             {
                 "question": p["question"],
@@ -150,11 +143,11 @@ class TestSmokeBaseline:
             patch("baseline.build_embeddings"),
             patch(
                 "baseline.Faithfulness",
-                return_value=_mock_metric(_BASELINE_METRICS["faithfulness"]),
+                return_value=mock_metric(_BASELINE_METRICS["faithfulness"]),
             ),
             patch(
                 "baseline.AnswerRelevancy",
-                return_value=_mock_metric(_BASELINE_METRICS["answer_relevancy"]),
+                return_value=mock_metric(_BASELINE_METRICS["answer_relevancy"]),
             ),
         ):
             metrics = compute_baseline_metrics(results)
@@ -200,7 +193,7 @@ class TestSmokeRagEval:
             assert isinstance(r["retrieved_contexts"], list)
             assert len(r["retrieved_contexts"]) > 0
 
-    def test_rag_metrics_contain_all_four_keys(self):
+    def test_rag_metrics_contain_all_four_keys(self, mock_metric):
         results = [
             {
                 "question": p["question"],
@@ -215,19 +208,19 @@ class TestSmokeRagEval:
             patch("run_eval.build_embeddings"),
             patch(
                 "run_eval.ContextRecall",
-                return_value=_mock_metric(_RAG_METRICS["context_recall"]),
+                return_value=mock_metric(_RAG_METRICS["context_recall"]),
             ),
             patch(
                 "run_eval.ContextPrecision",
-                return_value=_mock_metric(_RAG_METRICS["context_precision"]),
+                return_value=mock_metric(_RAG_METRICS["context_precision"]),
             ),
             patch(
                 "run_eval.Faithfulness",
-                return_value=_mock_metric(_RAG_METRICS["faithfulness"]),
+                return_value=mock_metric(_RAG_METRICS["faithfulness"]),
             ),
             patch(
                 "run_eval.AnswerRelevancy",
-                return_value=_mock_metric(_RAG_METRICS["answer_relevancy"]),
+                return_value=mock_metric(_RAG_METRICS["answer_relevancy"]),
             ),
         ):
             metrics = compute_rag_metrics(results)

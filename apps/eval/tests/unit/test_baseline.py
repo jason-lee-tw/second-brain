@@ -28,12 +28,6 @@ def _make_qa_pairs() -> list[dict]:
     ]
 
 
-def _mock_metric(value: float) -> MagicMock:
-    metric = MagicMock()
-    metric.ascore = AsyncMock(return_value=MetricResult(value=value))
-    return metric
-
-
 class TestRunBaseline:
     def _make_client(self, answers: list[str]) -> MagicMock:
         client = MagicMock()
@@ -79,36 +73,36 @@ class TestRunBaseline:
 
 
 class TestComputeBaselineMetrics:
-    def test_returns_faithfulness_and_answer_relevancy(self):
+    def test_returns_faithfulness_and_answer_relevancy(self, mock_metric):
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."},
         ]
         with (
             patch("baseline.build_llm"),
             patch("baseline.build_embeddings"),
-            patch("baseline.Faithfulness", return_value=_mock_metric(0.85)),
-            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.90)),
+            patch("baseline.Faithfulness", return_value=mock_metric(0.85)),
+            patch("baseline.AnswerRelevancy", return_value=mock_metric(0.90)),
         ):
             metrics = compute_baseline_metrics(results)
 
         assert metrics == {"faithfulness": 0.85, "answer_relevancy": 0.9}
 
-    def test_metrics_are_rounded_to_4_decimal_places(self):
+    def test_metrics_are_rounded_to_4_decimal_places(self, mock_metric):
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
         ]
         with (
             patch("baseline.build_llm"),
             patch("baseline.build_embeddings"),
-            patch("baseline.Faithfulness", return_value=_mock_metric(0.856789123)),
-            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.901234567)),
+            patch("baseline.Faithfulness", return_value=mock_metric(0.856789123)),
+            patch("baseline.AnswerRelevancy", return_value=mock_metric(0.901234567)),
         ):
             metrics = compute_baseline_metrics(results)
 
         assert metrics["faithfulness"] == round(0.856789123, 4)
         assert metrics["answer_relevancy"] == round(0.901234567, 4)
 
-    def test_context_recall_is_not_in_baseline_metrics(self):
+    def test_context_recall_is_not_in_baseline_metrics(self, mock_metric):
         """Baseline has no retrieval; context_recall/precision must be absent."""
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
@@ -116,30 +110,30 @@ class TestComputeBaselineMetrics:
         with (
             patch("baseline.build_llm"),
             patch("baseline.build_embeddings"),
-            patch("baseline.Faithfulness", return_value=_mock_metric(0.80)),
-            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.75)),
+            patch("baseline.Faithfulness", return_value=mock_metric(0.80)),
+            patch("baseline.AnswerRelevancy", return_value=mock_metric(0.75)),
         ):
             metrics = compute_baseline_metrics(results)
 
         assert "context_recall" not in metrics
         assert "context_precision" not in metrics
 
-    def test_nan_metric_returns_none(self):
+    def test_nan_metric_returns_none(self, mock_metric):
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
         ]
         with (
             patch("baseline.build_llm"),
             patch("baseline.build_embeddings"),
-            patch("baseline.Faithfulness", return_value=_mock_metric(float("nan"))),
-            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.80)),
+            patch("baseline.Faithfulness", return_value=mock_metric(float("nan"))),
+            patch("baseline.AnswerRelevancy", return_value=mock_metric(0.80)),
         ):
             metrics = compute_baseline_metrics(results)
 
         assert metrics["faithfulness"] is None
         assert metrics["answer_relevancy"] == 0.8
 
-    def test_metric_exception_for_one_sample_does_not_lose_others(self):
+    def test_metric_exception_for_one_sample_does_not_lose_others(self, mock_metric):
         """A failing .ascore() call becomes NaN and is excluded from the mean,
         matching the old evaluate(raise_exceptions=False) behavior."""
         results = [
@@ -154,7 +148,7 @@ class TestComputeBaselineMetrics:
             patch("baseline.build_llm"),
             patch("baseline.build_embeddings"),
             patch("baseline.Faithfulness", return_value=faithfulness_metric),
-            patch("baseline.AnswerRelevancy", return_value=_mock_metric(0.8)),
+            patch("baseline.AnswerRelevancy", return_value=mock_metric(0.8)),
         ):
             metrics = compute_baseline_metrics(results)
 

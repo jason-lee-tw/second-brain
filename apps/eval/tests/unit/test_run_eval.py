@@ -23,12 +23,6 @@ def _pair(question: str = "What is RAG?", expected: str = "RAG is cool.") -> dic
     }
 
 
-def _mock_metric(value: float) -> MagicMock:
-    metric = MagicMock()
-    metric.ascore = AsyncMock(return_value=MetricResult(value=value))
-    return metric
-
-
 class TestCallQueryEndpoint:
     def test_returns_answer_string(self):
         mock_response = MagicMock()
@@ -163,7 +157,7 @@ class TestRunRagEval:
 
 
 class TestComputeRagMetrics:
-    def test_returns_all_four_metrics(self):
+    def test_returns_all_four_metrics(self, mock_metric):
         results = [
             {
                 "question": "Q?",
@@ -175,10 +169,10 @@ class TestComputeRagMetrics:
         with (
             patch("run_eval.build_llm"),
             patch("run_eval.build_embeddings"),
-            patch("run_eval.ContextRecall", return_value=_mock_metric(0.80)),
-            patch("run_eval.ContextPrecision", return_value=_mock_metric(0.75)),
-            patch("run_eval.Faithfulness", return_value=_mock_metric(0.90)),
-            patch("run_eval.AnswerRelevancy", return_value=_mock_metric(0.85)),
+            patch("run_eval.ContextRecall", return_value=mock_metric(0.80)),
+            patch("run_eval.ContextPrecision", return_value=mock_metric(0.75)),
+            patch("run_eval.Faithfulness", return_value=mock_metric(0.90)),
+            patch("run_eval.AnswerRelevancy", return_value=mock_metric(0.85)),
         ):
             metrics = compute_rag_metrics(results)
 
@@ -189,7 +183,7 @@ class TestComputeRagMetrics:
             "answer_relevancy": 0.85,
         }
 
-    def test_metrics_are_rounded_to_4_decimal_places(self):
+    def test_metrics_are_rounded_to_4_decimal_places(self, mock_metric):
         results = [
             {
                 "question": "Q?",
@@ -201,16 +195,16 @@ class TestComputeRagMetrics:
         with (
             patch("run_eval.build_llm"),
             patch("run_eval.build_embeddings"),
-            patch("run_eval.ContextRecall", return_value=_mock_metric(0.801234567)),
-            patch("run_eval.ContextPrecision", return_value=_mock_metric(0.751234567)),
-            patch("run_eval.Faithfulness", return_value=_mock_metric(0.901234567)),
-            patch("run_eval.AnswerRelevancy", return_value=_mock_metric(0.851234567)),
+            patch("run_eval.ContextRecall", return_value=mock_metric(0.801234567)),
+            patch("run_eval.ContextPrecision", return_value=mock_metric(0.751234567)),
+            patch("run_eval.Faithfulness", return_value=mock_metric(0.901234567)),
+            patch("run_eval.AnswerRelevancy", return_value=mock_metric(0.851234567)),
         ):
             metrics = compute_rag_metrics(results)
 
         assert metrics["context_recall"] == round(0.801234567, 4)
 
-    def test_nan_metric_returns_none(self):
+    def test_nan_metric_returns_none(self, mock_metric):
         results = [
             {
                 "question": "Q?",
@@ -222,17 +216,17 @@ class TestComputeRagMetrics:
         with (
             patch("run_eval.build_llm"),
             patch("run_eval.build_embeddings"),
-            patch("run_eval.ContextRecall", return_value=_mock_metric(float("nan"))),
-            patch("run_eval.ContextPrecision", return_value=_mock_metric(0.75)),
-            patch("run_eval.Faithfulness", return_value=_mock_metric(0.90)),
-            patch("run_eval.AnswerRelevancy", return_value=_mock_metric(0.85)),
+            patch("run_eval.ContextRecall", return_value=mock_metric(float("nan"))),
+            patch("run_eval.ContextPrecision", return_value=mock_metric(0.75)),
+            patch("run_eval.Faithfulness", return_value=mock_metric(0.90)),
+            patch("run_eval.AnswerRelevancy", return_value=mock_metric(0.85)),
         ):
             metrics = compute_rag_metrics(results)
 
         assert metrics["context_recall"] is None
         assert metrics["faithfulness"] == 0.9
 
-    def test_metric_exception_for_one_sample_does_not_lose_others(self):
+    def test_metric_exception_for_one_sample_does_not_lose_others(self, mock_metric):
         """A failing .ascore() call becomes NaN and is excluded from the mean,
         matching the old evaluate(raise_exceptions=False) behavior."""
         results = [
@@ -256,10 +250,10 @@ class TestComputeRagMetrics:
         with (
             patch("run_eval.build_llm"),
             patch("run_eval.build_embeddings"),
-            patch("run_eval.ContextRecall", return_value=_mock_metric(0.8)),
-            patch("run_eval.ContextPrecision", return_value=_mock_metric(0.8)),
+            patch("run_eval.ContextRecall", return_value=mock_metric(0.8)),
+            patch("run_eval.ContextPrecision", return_value=mock_metric(0.8)),
             patch("run_eval.Faithfulness", return_value=faithfulness_metric),
-            patch("run_eval.AnswerRelevancy", return_value=_mock_metric(0.8)),
+            patch("run_eval.AnswerRelevancy", return_value=mock_metric(0.8)),
         ):
             metrics = compute_rag_metrics(results)
 
