@@ -79,9 +79,8 @@ class TestBuildEmbeddings:
 
 
 class TestScoreOrNan:
-    def test_returns_score_value_on_success(self):
-        metric = type("MockMetric", (), {})()
-        metric.ascore = AsyncMock(return_value=type("Score", (), {"value": 0.75})())
+    def test_returns_score_value_on_success(self, mock_metric):
+        metric = mock_metric(0.75)
 
         result = asyncio.run(ragas_client.score_or_nan(metric, user_input="q"))
 
