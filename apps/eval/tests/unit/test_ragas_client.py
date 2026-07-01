@@ -24,7 +24,7 @@ class TestSafeMean:
 class TestBuildLlm:
     def test_uses_anthropic_provider_and_judge_model(self):
         with (
-            patch("ragas_client.anthropic.Anthropic") as mock_anthropic,
+            patch("ragas_client.anthropic.AsyncAnthropic") as mock_anthropic,
             patch("ragas_client.llm_factory") as mock_llm_factory,
         ):
             result = ragas_client.build_llm()
@@ -41,7 +41,7 @@ class TestBuildLlm:
 class TestBuildEmbeddings:
     def test_points_openai_client_at_ollama(self):
         with (
-            patch("ragas_client.openai.OpenAI") as mock_openai,
+            patch("ragas_client.openai.AsyncOpenAI") as mock_openai,
             patch("ragas_client.embedding_factory") as mock_embedding_factory,
         ):
             result = ragas_client.build_embeddings()

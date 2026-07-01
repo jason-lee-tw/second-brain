@@ -19,7 +19,7 @@ def build_llm():
     return llm_factory(
         JUDGE_MODEL,
         provider="anthropic",
-        client=anthropic.Anthropic(api_key=ANTHROPIC_API_KEY),
+        client=anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY),
     )
 
 
@@ -28,7 +28,7 @@ def build_embeddings():
     return embedding_factory(
         "openai",
         model=EMBEDDING_MODEL,
-        client=openai.OpenAI(base_url=f"{OLLAMA_URL}/v1", api_key="ollama"),
+        client=openai.AsyncOpenAI(base_url=f"{OLLAMA_URL}/v1", api_key="ollama"),
     )
 
 
