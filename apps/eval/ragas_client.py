@@ -1,0 +1,38 @@
+"""Shared RAGAS LLM/embeddings setup and NaN-safe score aggregation."""
+
+import math
+import os
+
+import anthropic
+import openai
+from ragas.embeddings.base import embedding_factory
+from ragas.llms.base import llm_factory
+
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+EMBEDDING_MODEL = "qwen3-embedding:0.6b"
+JUDGE_MODEL = "claude-sonnet-4-6"
+
+
+def build_llm():
+    """Instructor-based Anthropic LLM for RAGAS collections metrics."""
+    return llm_factory(
+        JUDGE_MODEL,
+        provider="anthropic",
+        client=anthropic.Anthropic(api_key=ANTHROPIC_API_KEY),
+    )
+
+
+def build_embeddings():
+    """Local Ollama embeddings via its OpenAI-compatible endpoint (no OpenAI key)."""
+    return embedding_factory(
+        "openai",
+        model=EMBEDDING_MODEL,
+        client=openai.OpenAI(base_url=f"{OLLAMA_URL}/v1", api_key="ollama"),
+    )
+
+
+def safe_mean(values: list[float]) -> float | None:
+    """Average non-NaN scores; None if the list is empty or every score is NaN."""
+    clean = [v for v in values if not math.isnan(v)]
+    return round(sum(clean) / len(clean), 4) if clean else None
