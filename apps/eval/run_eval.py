@@ -42,12 +42,6 @@ def call_query_endpoint(question: str, backend_url: str = _BACKEND_URL) -> str:
     return response.json()["answer"]
 
 
-def embed_query(question: str, ollama_url: str = _OLLAMA_URL) -> list[float]:
-    """Embed a question using OllamaEmbeddings (langchain-ollama)."""
-    embeddings = OllamaEmbeddings(model=_EMBEDDING_MODEL, base_url=ollama_url)
-    return embeddings.embed_query(question)
-
-
 def fetch_top_k_chunks(conn, embedding: list[float], k: int = _TOP_K) -> list[str]:
     """Run pgvector cosine similarity search and return top-k chunk contents."""
     embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"

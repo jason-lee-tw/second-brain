@@ -6,7 +6,6 @@ from ragas.metrics.result import MetricResult
 from run_eval import (
     call_query_endpoint,
     compute_rag_metrics,
-    embed_query,
     fetch_top_k_chunks,
     run_rag_eval,
 )
@@ -49,14 +48,6 @@ class TestCallQueryEndpoint:
         with patch("run_eval.httpx.post", return_value=mock_response):
             with pytest.raises(Exception, match="500"):
                 call_query_endpoint("Q?", backend_url="http://localhost:3001")
-
-
-class TestEmbedQuery:
-    def test_returns_list_of_floats(self):
-        with patch("run_eval.OllamaEmbeddings") as mock_cls:
-            mock_cls.return_value.embed_query.return_value = [0.1, 0.2, 0.3]
-            embedding = embed_query("What is RAG?", ollama_url="http://localhost:11434")
-        assert embedding == [0.1, 0.2, 0.3]
 
 
 class TestFetchTopKChunks:
