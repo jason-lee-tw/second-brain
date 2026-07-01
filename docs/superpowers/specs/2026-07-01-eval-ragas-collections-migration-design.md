@@ -61,11 +61,15 @@ JUDGE_MODEL = "claude-sonnet-4-6"
 
 def build_llm():
     """Instructor-based Anthropic LLM for RAGAS collections metrics."""
-    return llm_factory(
+    llm = llm_factory(
         JUDGE_MODEL,
         provider="anthropic",
-        client=anthropic.Anthropic(api_key=ANTHROPIC_API_KEY),
+        client=anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY),
     )
+    # claude-sonnet-4-6 rejects temperature+top_p together (HTTP 400);
+    # ragas's InstructorModelArgs defaults both, so drop top_p, keep temperature.
+    llm.model_args.pop("top_p", None)
+    return llm
 
 
 def build_embeddings():
@@ -73,7 +77,7 @@ def build_embeddings():
     return embedding_factory(
         "openai",
         model=EMBEDDING_MODEL,
-        client=openai.OpenAI(base_url=f"{OLLAMA_URL}/v1", api_key="ollama"),
+        client=openai.AsyncOpenAI(base_url=f"{OLLAMA_URL}/v1", api_key="ollama"),
     )
 
 
@@ -84,12 +88,15 @@ def safe_mean(values: list[float]) -> float | None:
 ```
 
 - `build_llm()` uses `ragas.llms.base.llm_factory`, which patches the given client with
-  `instructor` for structured output. `instructor` and `anthropic` are already
+  `instructor` for structured output. The client must be `anthropic.AsyncAnthropic`,
+  not the sync `Anthropic` client — RAGAS collections metrics call `agenerate()`
+  internally, which requires an async client. `instructor` and `anthropic` are already
   installed (no new dependency).
-- `build_embeddings()` points a plain `openai.OpenAI` client at Ollama's own
-  `/v1/embeddings` endpoint instead of api.openai.com. `openai` is already installed
-  transitively via `ragas`/`langchain-openai` (no new dependency). Reuses the same
-  model `run_eval.py` already runs locally for retrieval.
+- `build_embeddings()` points an `openai.AsyncOpenAI` client at Ollama's own
+  `/v1/embeddings` endpoint instead of api.openai.com — async for the same reason as
+  `build_llm()`: collections metrics call `aembed_text()` internally. `openai` is
+  already installed transitively via `ragas`/`langchain-openai` (no new dependency).
+  Reuses the same model `run_eval.py` already runs locally for retrieval.
 
 ### `apps/eval/baseline.py`
 
@@ -196,12 +203,26 @@ currently mock `evaluate()`, `SingleTurnSample`, `EvaluationDataset`, and
 
 ## Verification
 
-Not yet confirmed against a live Ollama instance. Before calling this done:
+Confirmed against a live Ollama + Anthropic setup during Task 5's Tier-3 verification.
+`just eval-baseline` and `just eval-rag` initially exited 0 with **every metric `null`**
+even though `just test-eval`/`just lint`/`just type-check` were green — `_score_all()`'s
+bare `except Exception: append(nan)` was silently swallowing real errors that the
+mocked unit tests never exercised. Two root causes were found and fixed live, then
+re-verified:
 
 1. `just up-all` (Ollama running, `qwen3-embedding:0.6b` pulled).
-2. `just eval-baseline` end-to-end — confirm no `OpenAIError`, no deprecation
-   warnings, and `faithfulness` / `answer_relevancy` scores are produced.
-3. `just eval-rag` end-to-end — same check for all four metrics.
+2. `just eval-baseline` end-to-end — first run's swallowed exception was `TypeError:
+   Cannot use agenerate() with a synchronous client` (`build_llm()`/`build_embeddings()`
+   passed sync `anthropic.Anthropic`/`openai.OpenAI` clients into `llm_factory()`/
+   `embedding_factory()`, but collections metrics call the async `agenerate()`/
+   `aembed_text()`); fixed by switching to `anthropic.AsyncAnthropic`/
+   `openai.AsyncOpenAI` (commit `63c7ed9`). Re-run's swallowed exception was Anthropic
+   HTTP 400 `"temperature and top_p cannot both be specified for this model"`; fixed by
+   popping `top_p` from `llm.model_args` (commit `435619e`). Final run: no
+   `OpenAIError`, no deprecation warnings, non-null `faithfulness` / `answer_relevancy`
+   scores produced.
+3. `just eval-rag` end-to-end — same two fixes apply; confirmed non-null values for
+   all four metrics.
 4. `just test-eval`, `just lint`, `just type-check` all pass.
 
 ## Decisions log
@@ -215,3 +236,5 @@ Not yet confirmed against a live Ollama instance. Before calling this done:
 | 5 | Keep `evaluate()`'s per-sample error tolerance? | Yes — catch, NaN, continue | Matches current behavior; one bad sample shouldn't lose the rest. |
 | 6 | Scoring loop concurrency? | Sequential | Matches existing loop style; dataset is only 10-50 pairs. |
 | 7 | Shared setup code (`llm_factory`/`embedding_factory`/NaN-mean)? | Extract `ragas_client.py` | Would otherwise be ~20 identical lines duplicated across two files being touched by this exact change. |
+| 8 | Sync or async ragas client? | Async (`AsyncAnthropic`/`AsyncOpenAI`) | `ragas.metrics.collections` metrics call `agenerate()`/`aembed_text()` internally; sync clients raise `TypeError`. Found during live Tier-3 verification, not anticipated in the original design. |
+| 9 | `temperature`+`top_p` both set for `claude-sonnet-4-6`? | Pop `top_p` from `llm.model_args` after `llm_factory()` returns it | Anthropic API rejects both being set simultaneously for this model (HTTP 400). `InstructorModelArgs` defaults both; no constructor-level way to omit one. Found during live Tier-3 verification. |
