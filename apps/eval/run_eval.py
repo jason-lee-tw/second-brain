@@ -21,7 +21,7 @@ from ragas.metrics.collections import (
     ContextRecall,
     Faithfulness,
 )
-from ragas_client import build_embeddings, build_llm, safe_mean
+from ragas_client import build_embeddings, build_llm, safe_mean, score_or_nan
 from schema import validate_dataset
 
 _BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:3001")
@@ -108,40 +108,37 @@ async def _score_all(results: list[dict]) -> dict[str, list[float]]:
         "answer_relevancy": [],
     }
     for r in results:
-        try:
-            score = await context_recall.ascore(
+        scores["context_recall"].append(
+            await score_or_nan(
+                context_recall,
                 user_input=r["question"],
                 retrieved_contexts=r["retrieved_contexts"],
                 reference=r["expected_answer"],
             )
-            scores["context_recall"].append(score.value)
-        except Exception:
-            scores["context_recall"].append(float("nan"))
-        try:
-            score = await context_precision.ascore(
+        )
+        scores["context_precision"].append(
+            await score_or_nan(
+                context_precision,
                 user_input=r["question"],
                 reference=r["expected_answer"],
                 retrieved_contexts=r["retrieved_contexts"],
             )
-            scores["context_precision"].append(score.value)
-        except Exception:
-            scores["context_precision"].append(float("nan"))
-        try:
-            score = await faithfulness.ascore(
+        )
+        scores["faithfulness"].append(
+            await score_or_nan(
+                faithfulness,
                 user_input=r["question"],
                 response=r["generated_answer"],
                 retrieved_contexts=r["retrieved_contexts"],
             )
-            scores["faithfulness"].append(score.value)
-        except Exception:
-            scores["faithfulness"].append(float("nan"))
-        try:
-            score = await answer_relevancy.ascore(
-                user_input=r["question"], response=r["generated_answer"]
+        )
+        scores["answer_relevancy"].append(
+            await score_or_nan(
+                answer_relevancy,
+                user_input=r["question"],
+                response=r["generated_answer"],
             )
-            scores["answer_relevancy"].append(score.value)
-        except Exception:
-            scores["answer_relevancy"].append(float("nan"))
+        )
     return scores
 
 

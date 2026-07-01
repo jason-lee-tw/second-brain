@@ -9,7 +9,7 @@ from pathlib import Path
 
 import anthropic
 from ragas.metrics.collections import AnswerRelevancy, Faithfulness
-from ragas_client import build_embeddings, build_llm, safe_mean
+from ragas_client import build_embeddings, build_llm, safe_mean, score_or_nan
 from schema import validate_dataset
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -52,23 +52,22 @@ async def _score_all(results: list[dict]) -> dict[str, list[float]]:
     faithfulness_scores: list[float] = []
     relevancy_scores: list[float] = []
     for r in results:
-        try:
-            score = await faithfulness.ascore(
+        faithfulness_scores.append(
+            await score_or_nan(
+                faithfulness,
                 user_input=r["question"],
                 response=r["generated_answer"],
                 # ponytail: proxy for no-retrieval baseline
                 retrieved_contexts=[r["expected_answer"]],
             )
-            faithfulness_scores.append(score.value)
-        except Exception:
-            faithfulness_scores.append(float("nan"))
-        try:
-            score = await answer_relevancy.ascore(
-                user_input=r["question"], response=r["generated_answer"]
+        )
+        relevancy_scores.append(
+            await score_or_nan(
+                answer_relevancy,
+                user_input=r["question"],
+                response=r["generated_answer"],
             )
-            relevancy_scores.append(score.value)
-        except Exception:
-            relevancy_scores.append(float("nan"))
+        )
     return {"faithfulness": faithfulness_scores, "answer_relevancy": relevancy_scores}
 
 

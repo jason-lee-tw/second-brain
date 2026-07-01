@@ -1,4 +1,6 @@
-from unittest.mock import patch
+import asyncio
+import math
+from unittest.mock import AsyncMock, patch
 
 import ragas_client
 
@@ -74,3 +76,26 @@ class TestBuildEmbeddings:
             client=mock_openai.return_value,
         )
         assert result is mock_embedding_factory.return_value
+
+
+class TestScoreOrNan:
+    def test_returns_score_value_on_success(self):
+        metric = type("MockMetric", (), {})()
+        metric.ascore = AsyncMock(return_value=type("Score", (), {"value": 0.75})())
+
+        result = asyncio.run(ragas_client.score_or_nan(metric, user_input="q"))
+
+        assert result == 0.75
+        metric.ascore.assert_awaited_once_with(user_input="q")
+
+    def test_returns_nan_and_logs_on_exception(self, capsys):
+        metric = type("Faithfulness", (), {})()
+        metric.ascore = AsyncMock(side_effect=ValueError("boom"))
+
+        result = asyncio.run(ragas_client.score_or_nan(metric, user_input="q"))
+
+        assert math.isnan(result)
+        captured = capsys.readouterr()
+        assert "ValueError" in captured.err
+        assert "boom" in captured.err
+        assert "Faithfulness" in captured.err
