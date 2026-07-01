@@ -94,6 +94,7 @@ AC-9 is satisfied when `context_recall` and `faithfulness` are higher for RAG th
 ```
 apps/eval/
 ├── schema.py               # QAPair TypedDict + validate_qa_pair / validate_dataset
+├── ragas_client.py         # build_llm / build_embeddings / safe_mean / score_or_nan (shared by baseline.py, run_eval.py)
 ├── generate_dataset.py     # Step 1: Claude → raw Q&A JSON
 ├── baseline.py             # Step 3: no-RAG evaluation (faithfulness, answer_relevancy)
 ├── run_eval.py             # Step 4: RAG evaluation (all 4 RAGAS metrics)
@@ -102,7 +103,7 @@ apps/eval/
 │   ├── .gitignore          # raw_qa_pairs.json excluded; qa_pairs.json committed
 │   └── qa_pairs.json       # curated dataset (add after Step 2)
 ├── results/                # generated reports and JSON result files (gitignored)
-└── tests/unit/             # 67 offline tests (all external calls mocked)
+└── tests/unit/             # offline unit tests (all external calls mocked)
 ```
 
 ## RAGAS metrics
