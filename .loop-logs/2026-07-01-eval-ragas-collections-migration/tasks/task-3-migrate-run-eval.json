@@ -1,0 +1,10 @@
+{
+  "task_id": "task-3-migrate-run-eval",
+  "plan": "docs/superpowers/plans/2026-07-01-eval-ragas-collections-migration.md",
+  "spec": "docs/superpowers/specs/2026-07-01-eval-ragas-collections-migration-design.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-3-migrate-run-eval",
+  "completed_steps": ["tdd-loop-complete"],
+  "depends_on": ["task-1-ragas-client-helper"]
+}

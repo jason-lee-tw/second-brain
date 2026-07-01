@@ -1,0 +1,10 @@
+{
+  "task_id": "task-4-remove-unused-deps",
+  "plan": "docs/superpowers/plans/2026-07-01-eval-ragas-collections-migration.md",
+  "spec": "docs/superpowers/specs/2026-07-01-eval-ragas-collections-migration-design.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-4-remove-unused-deps",
+  "completed_steps": ["tdd-loop-complete"],
+  "depends_on": ["task-2-migrate-baseline", "task-3-migrate-run-eval"]
+}
