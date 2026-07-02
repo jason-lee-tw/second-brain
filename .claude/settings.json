@@ -11,15 +11,16 @@
       "Bash(just:*)",
       "Read(*)",
       "Write(*)",
-      "Edit(*)"
+      "Edit(*)",
+      "Bash(rm -rf .loop-logs/:*)"
     ],
     "deny": [
       "Read(*.env)",
       "Edit(*/.env)",
       "Bash(git push:*)",
-      "Bash(git reset --hard:*)",
-      "Bash(rm -rf:*)"
+      "Bash(git reset --hard:*)"
     ],
+    "ask": ["Bash(rm -rf:*)"],
     "defaultMode": "auto"
   },
   "model": "sonnet[1m]",

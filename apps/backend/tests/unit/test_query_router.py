@@ -32,6 +32,7 @@ def test_query_response_shape():
         isUncertain=False,
         conflictDetected=False,
         conflictContext=[],
+        retrievedContexts=["Douglas Adams wrote The Hitchhiker's Guide."],
     )
     assert resp.answer == "42"
     assert resp.sessionId == "session-abc"
@@ -39,6 +40,21 @@ def test_query_response_shape():
     assert resp.isUncertain is False
     assert resp.conflictDetected is False
     assert resp.conflictContext == []
+    assert resp.retrievedContexts == ["Douglas Adams wrote The Hitchhiker's Guide."]
+
+
+def test_query_response_accepts_empty_retrieved_contexts():
+    """retrievedContexts must round-trip as an empty list."""
+    resp = QueryResponse(
+        answer="42",
+        sessionId="session-abc",
+        confidence=0.95,
+        isUncertain=False,
+        conflictDetected=False,
+        conflictContext=[],
+        retrievedContexts=[],
+    )
+    assert resp.retrievedContexts == []
 
 
 _PATCH_TARGET = "second_brain.api.routers.query._get_graph"
@@ -66,3 +82,38 @@ def test_graph_error_propagates_not_swallowed():
         client = TestClient(app, raise_server_exceptions=True)
         with pytest.raises(RuntimeError, match="boom"):
             client.post("/query", json={"message": "Hello"})
+
+
+def _base_graph_result() -> dict:
+    """Minimal SecondBrainState output dict satisfying the router's required keys."""
+    return {
+        "final_answer": "42",
+        "confidence": 0.9,
+        "is_uncertain": False,
+    }
+
+
+def test_retrieved_contexts_is_pass_through_of_context_used():
+    """retrievedContexts is a straight pass-through of the graph's context_used —
+    the single source of truth for what synthesis actually grounded the answer on."""
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke.return_value = {
+        **_base_graph_result(),
+        "context_used": [
+            "Paris is the capital of France.",
+            "**Europe** (http://example.com)\nFrance is a country in Europe.",
+            "- User is planning a trip to Paris. (confidence: 0.80)",
+        ],
+        "conflict_context": [],
+    }
+
+    with patch(_PATCH_TARGET, new=AsyncMock(return_value=mock_graph)):
+        client = TestClient(app)
+        response = client.post("/query", json={"message": "Tell me about Paris"})
+
+    assert response.status_code == 200
+    assert response.json()["retrievedContexts"] == [
+        "Paris is the capital of France.",
+        "**Europe** (http://example.com)\nFrance is a country in Europe.",
+        "- User is planning a trip to Paris. (confidence: 0.80)",
+    ]

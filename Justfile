@@ -111,6 +111,12 @@ test-integration:
   @uv run --package second-brain pytest apps/backend/tests/integration
 
 
+# Eval harness unit tests
+[group: "Test"]
+test-eval:
+  @uv run --directory apps/eval pytest tests/unit
+
+
 # Run all backend tests
 [group: "Test"]
 test:
@@ -121,3 +127,29 @@ test:
 [group: "Test"]
 check-implementation-backend:
   @just format lint type-check test-unit test-integration
+
+
+_eval-env := if path_exists("apps/eval/.env") == "true" { "--env-file " + justfile_directory() + "/apps/eval/.env" } else { "" }
+
+# Generate raw Q&A pairs from ingested documents (requires running backend + DB)
+[group: "LLM Evaluation"]
+eval-generate n_per_doc="7" output="dataset/raw_qa_pairs.json":
+  @uv run --directory apps/eval {{_eval-env}} python generate_dataset.py --n-per-doc {{n_per_doc}} --output {{output}}
+
+
+# Run no-RAG baseline evaluation (requires ANTHROPIC_API_KEY)
+[group: "LLM Evaluation"]
+eval-baseline dataset="dataset/qa_pairs.json" output="results/baseline.json":
+  @uv run --directory apps/eval {{_eval-env}} python baseline.py --dataset {{dataset}} --output {{output}}
+
+
+# Run RAG pipeline evaluation (requires running backend + DB + Ollama)
+[group: "LLM Evaluation"]
+eval-rag dataset="dataset/qa_pairs.json" output="results/rag.json":
+  @uv run --directory apps/eval {{_eval-env}} python run_eval.py --dataset {{dataset}} --output {{output}}
+
+
+# Generate comparison report from baseline and RAG result files
+[group: "LLM Evaluation"]
+eval-report baseline="results/baseline.json" rag="results/rag.json" output_dir="results":
+  @uv run --directory apps/eval {{_eval-env}} python compare.py --baseline {{baseline}} --rag {{rag}} --output-dir {{output_dir}}

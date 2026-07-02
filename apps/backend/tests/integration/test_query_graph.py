@@ -211,6 +211,14 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
     """AC-10: omitting sessionId generates a fresh UUID; supplying the returned
     sessionId on the next call re-uses the same LangGraph thread (same thread_id
     passed to ainvoke), providing session continuity.
+
+    Also covers the fix for retrievedContexts fidelity: with routing_decision
+    "neither" and no memory hits, the /query response's retrievedContexts must
+    be []. memory_retrieval_node runs on an unconditional graph edge regardless
+    of routing_decision and would otherwise call the real embed_text()/
+    get_pgvector_pool() (live Postgres/Ollama), so it is stubbed out here; the
+    memory_agent's LLM is likewise stubbed since memory_agent_node always runs
+    after synthesis.
     """
     import uuid
 
@@ -234,6 +242,15 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
             "conflict_context": [],
         }
 
+    # memory_retrieval_node runs unconditionally before the orchestrator; stub it
+    # so the graph never touches real embeddings/pgvector during this test.
+    async def _stub_memory_retrieval_node(_state: dict) -> dict:
+        return {"retrieved_memory": []}
+
+    mock_memory_agent_output = MagicMock()
+    mock_memory_agent_output.fact_updates = []
+    mock_memory_agent_output.correction_updates = []
+
     with (
         patch(
             "second_brain.graphs.query_graph.AsyncConnectionPool",
@@ -242,6 +259,10 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
         patch(
             "second_brain.graphs.query_graph.AsyncPostgresSaver",
             _mock_saver_factory(mem_saver),
+        ),
+        patch(
+            "second_brain.graphs.query_graph.memory_retrieval_node",
+            _stub_memory_retrieval_node,
         ),
         patch("second_brain.nodes.orchestrator._structured_llm") as mock_orch_llm,
         patch("second_brain.nodes.synthesis._structured_llm") as mock_synth_llm,
@@ -284,10 +305,14 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
             ),
             patch("second_brain.nodes.orchestrator._structured_llm") as mock_orch2,
             patch("second_brain.nodes.synthesis._structured_llm") as mock_synth2,
+            patch("second_brain.nodes.memory_agent._llm") as mock_memory_agent_llm,
         ):
             mock_orch2.ainvoke = AsyncMock(return_value=_mock_routing("neither"))
             mock_synth2.ainvoke = AsyncMock(
                 return_value=_mock_synthesis("Second Brain is here to help.")
+            )
+            mock_memory_agent_llm.ainvoke = AsyncMock(
+                return_value=mock_memory_agent_output
             )
 
             async with AsyncClient(
@@ -307,6 +332,10 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
                     f"sessionId must be a valid UUID; got {session_id!r}"
                 )
 
+                # routing_decision="neither" and no memory hits -> no grounding
+                # context was used, so retrievedContexts must be empty.
+                assert data1["retrievedContexts"] == []
+
                 # --- Second call: supply the returned sessionId ---
                 resp2 = await client.post(
                     "/query",
@@ -320,6 +349,7 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
                     f"Second call must echo back the same sessionId; "
                     f"got {data2['sessionId']!r}"
                 )
+                assert data2["retrievedContexts"] == []
 
     finally:
         # Restore router state to avoid cross-test pollution

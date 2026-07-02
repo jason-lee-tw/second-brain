@@ -3166,15 +3166,29 @@ name = "second-brain-eval"
 version = "0.1.0"
 source = { virtual = "apps/eval" }
 dependencies = [
+    { name = "anthropic" },
+    { name = "httpx" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "ragas" },
     { name = "second-brain" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=0.40.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.1.0" },
     { name = "ragas", specifier = ">=0.2.0,<0.5" },
     { name = "second-brain", editable = "apps/backend" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.0" }]
 
 [[package]]
 name = "setuptools"
