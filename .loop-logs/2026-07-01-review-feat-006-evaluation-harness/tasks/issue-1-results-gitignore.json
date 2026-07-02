@@ -1,1 +1,0 @@
-{"issue_id":"issue-1-results-gitignore","status":"completed","attempt":1,"worktree":null,"severity":"important","commit":"7b66149","summary":"Added apps/eval/results/.gitignore (allowlist pattern) so generated eval output is actually ignored, matching README's claim"}

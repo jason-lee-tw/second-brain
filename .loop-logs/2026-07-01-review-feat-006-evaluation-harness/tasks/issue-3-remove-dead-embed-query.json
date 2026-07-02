@@ -1,1 +1,0 @@
-{"issue_id":"issue-3-remove-dead-embed-query","status":"completed","attempt":1,"worktree":null,"severity":"minor","commit":"98d08dc","summary":"Removed dead embed_query() function and its only-caller test"}
