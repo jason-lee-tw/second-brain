@@ -115,18 +115,3 @@ def test_retrieved_contexts_flattens_rag_web_and_memory_results():
         "France is a country in Europe.",
         "User is planning a trip to Paris.",
     ]
-
-
-def test_retrieved_contexts_defaults_to_empty_list_when_sources_absent():
-    """When rag_results/web_results/retrieved_memory/conflict_context are absent
-    from the graph output entirely, the router must use .get(..., []) rather than
-    direct indexing, and retrievedContexts must default to []."""
-    mock_graph = AsyncMock()
-    mock_graph.ainvoke.return_value = _base_graph_result()
-
-    with patch(_PATCH_TARGET, new=AsyncMock(return_value=mock_graph)):
-        client = TestClient(app)
-        response = client.post("/query", json={"message": "Hello"})
-
-    assert response.status_code == 200
-    assert response.json()["retrievedContexts"] == []

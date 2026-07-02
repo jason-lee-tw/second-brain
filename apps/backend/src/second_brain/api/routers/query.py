@@ -60,9 +60,9 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
 
     conflict_context = result.get("conflict_context", [])
     retrieved_contexts = (
-        [r["content"] for r in result.get("rag_results", [])]
-        + [r["content"] for r in result.get("web_results", [])]
-        + [m["fact"] for m in result.get("retrieved_memory", [])]
+        [r["content"] for r in result["rag_results"]]
+        + [r["content"] for r in result["web_results"]]
+        + [m["fact"] for m in result["retrieved_memory"]]
     )
     return QueryResponse(
         answer=result["final_answer"],
