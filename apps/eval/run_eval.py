@@ -45,6 +45,9 @@ def run_rag_eval(
         print(f"  [{i}/{total}] {pair['question'][:70]}...")
         response = call_query_endpoint(pair["question"], backend_url=backend_url)
         generated_answer = response["answer"]
+        # .get() (not direct index): this crosses a process boundary (HTTP call to
+        # the backend), unlike query.py's internal state access — an older/different
+        # backend deployment might not have this field yet.
         retrieved_contexts = response.get("retrievedContexts", [])
         results.append(
             {
