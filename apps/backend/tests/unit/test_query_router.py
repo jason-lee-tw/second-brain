@@ -32,6 +32,7 @@ def test_query_response_shape():
         isUncertain=False,
         conflictDetected=False,
         conflictContext=[],
+        retrievedContexts=["Douglas Adams wrote The Hitchhiker's Guide."],
     )
     assert resp.answer == "42"
     assert resp.sessionId == "session-abc"
@@ -39,6 +40,21 @@ def test_query_response_shape():
     assert resp.isUncertain is False
     assert resp.conflictDetected is False
     assert resp.conflictContext == []
+    assert resp.retrievedContexts == ["Douglas Adams wrote The Hitchhiker's Guide."]
+
+
+def test_query_response_accepts_empty_retrieved_contexts():
+    """retrievedContexts must round-trip as an empty list."""
+    resp = QueryResponse(
+        answer="42",
+        sessionId="session-abc",
+        confidence=0.95,
+        isUncertain=False,
+        conflictDetected=False,
+        conflictContext=[],
+        retrievedContexts=[],
+    )
+    assert resp.retrievedContexts == []
 
 
 _PATCH_TARGET = "second_brain.api.routers.query._get_graph"
@@ -66,3 +82,51 @@ def test_graph_error_propagates_not_swallowed():
         client = TestClient(app, raise_server_exceptions=True)
         with pytest.raises(RuntimeError, match="boom"):
             client.post("/query", json={"message": "Hello"})
+
+
+def _base_graph_result() -> dict:
+    """Minimal SecondBrainState output dict satisfying the router's required keys."""
+    return {
+        "final_answer": "42",
+        "confidence": 0.9,
+        "is_uncertain": False,
+    }
+
+
+def test_retrieved_contexts_flattens_rag_web_and_memory_results():
+    """retrievedContexts concatenates rag_results, web_results, and
+    retrieved_memory content — in that order — from the graph's raw output."""
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke.return_value = {
+        **_base_graph_result(),
+        "rag_results": [{"content": "Paris is the capital of France."}],
+        "web_results": [{"content": "France is a country in Europe."}],
+        "retrieved_memory": [{"fact": "User is planning a trip to Paris."}],
+        "conflict_context": [],
+    }
+
+    with patch(_PATCH_TARGET, new=AsyncMock(return_value=mock_graph)):
+        client = TestClient(app)
+        response = client.post("/query", json={"message": "Tell me about Paris"})
+
+    assert response.status_code == 200
+    assert response.json()["retrievedContexts"] == [
+        "Paris is the capital of France.",
+        "France is a country in Europe.",
+        "User is planning a trip to Paris.",
+    ]
+
+
+def test_retrieved_contexts_defaults_to_empty_list_when_sources_absent():
+    """When rag_results/web_results/retrieved_memory/conflict_context are absent
+    from the graph output entirely, the router must use .get(..., []) rather than
+    direct indexing, and retrievedContexts must default to []."""
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke.return_value = _base_graph_result()
+
+    with patch(_PATCH_TARGET, new=AsyncMock(return_value=mock_graph)):
+        client = TestClient(app)
+        response = client.post("/query", json={"message": "Hello"})
+
+    assert response.status_code == 200
+    assert response.json()["retrievedContexts"] == []

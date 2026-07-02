@@ -56,7 +56,7 @@ just eval-baseline dataset=apps/eval/dataset/qa_pairs.json output=apps/eval/resu
 
 ### Step 4 — Run the RAG evaluation
 
-Calls the `/query` endpoint, fetches the actual retrieved chunks from pgvector, and measures all four RAGAS metrics.
+Calls the `/query` endpoint and reads the `retrievedContexts` field directly from that response — the RAG chunks, web results, and memory facts the backend itself used to ground the answer (routing may skip RAG entirely, and memory facts always blend in, so re-querying pgvector separately would measure the wrong context). Measures all four RAGAS metrics against that grounding context.
 
 ```bash
 just eval-rag

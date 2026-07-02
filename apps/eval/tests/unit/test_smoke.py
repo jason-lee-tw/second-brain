@@ -1,7 +1,7 @@
 """
 End-to-end smoke test: runs the full eval pipeline on a 3-pair fixture dataset.
 
-All external calls (Claude, httpx /query, psycopg, OllamaEmbeddings, RAGAS evaluate)
+All external calls (Claude/Anthropic client, httpx /query call, RAGAS evaluate/metrics)
 are mocked so this test runs offline with no infrastructure.
 """
 
@@ -93,19 +93,6 @@ def _mock_claude_client(answers: list[str]) -> MagicMock:
     return client
 
 
-def _mock_conn(contexts_by_call: list[list[str]]) -> MagicMock:
-    conn = MagicMock()
-    cursors = []
-    for contexts in contexts_by_call:
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
-        cur.fetchall.return_value = [{"content": c} for c in contexts]
-        cursors.append(cur)
-    conn.cursor.side_effect = cursors
-    return conn
-
-
 class TestSmokeSchemaValidation:
     def test_fixture_dataset_passes_validation(self):
         validate_dataset(FIXTURE_DATASET)
@@ -156,39 +143,30 @@ class TestSmokeBaseline:
         assert "context_recall" not in metrics
 
 
-def _mock_ollama_smoke(embedding: list[float]):
-    mock_cls = MagicMock()
-    mock_cls.return_value.embed_query.return_value = embedding
-    return patch("run_eval.OllamaEmbeddings", mock_cls)
+def _mock_query_responses(
+    answers: list[str], contexts_by_call: list[list[str]]
+) -> list[dict]:
+    return [
+        {"answer": answer, "retrievedContexts": contexts}
+        for answer, contexts in zip(answers, contexts_by_call)
+    ]
 
 
 class TestSmokeRagEval:
     def test_rag_eval_produces_one_result_per_pair(self):
-        conn = _mock_conn(_RETRIEVED_CONTEXTS)
-        with (
-            patch("run_eval.call_query_endpoint", side_effect=_RAG_ANSWERS),
-            _mock_ollama_smoke([0.1, 0.2, 0.3]),
+        with patch(
+            "run_eval.call_query_endpoint",
+            side_effect=_mock_query_responses(_RAG_ANSWERS, _RETRIEVED_CONTEXTS),
         ):
-            results = run_rag_eval(
-                FIXTURE_DATASET,
-                conn,
-                backend_url="http://localhost:3001",
-                ollama_url="http://localhost:11434",
-            )
+            results = run_rag_eval(FIXTURE_DATASET, backend_url="http://localhost:3001")
         assert len(results) == len(FIXTURE_DATASET)
 
     def test_rag_results_include_retrieved_contexts(self):
-        conn = _mock_conn(_RETRIEVED_CONTEXTS)
-        with (
-            patch("run_eval.call_query_endpoint", side_effect=_RAG_ANSWERS),
-            _mock_ollama_smoke([0.1, 0.2, 0.3]),
+        with patch(
+            "run_eval.call_query_endpoint",
+            side_effect=_mock_query_responses(_RAG_ANSWERS, _RETRIEVED_CONTEXTS),
         ):
-            results = run_rag_eval(
-                FIXTURE_DATASET,
-                conn,
-                backend_url="http://localhost:3001",
-                ollama_url="http://localhost:11434",
-            )
+            results = run_rag_eval(FIXTURE_DATASET, backend_url="http://localhost:3001")
         for r in results:
             assert isinstance(r["retrieved_contexts"], list)
             assert len(r["retrieved_contexts"]) > 0

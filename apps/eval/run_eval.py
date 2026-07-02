@@ -8,13 +8,9 @@ import argparse
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 
 import httpx
-import psycopg
-from langchain_ollama import OllamaEmbeddings
-from psycopg.rows import dict_row
 from ragas.metrics.collections import (
     AnswerRelevancy,
     ContextPrecision,
@@ -25,56 +21,31 @@ from ragas_client import build_embeddings, build_llm, safe_mean, score_or_nan
 from schema import validate_dataset
 
 _BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:3001")
-_DB_URL = re.sub(r"\+[^:]+(?=://)", "", os.environ.get("DATABASE_URL", ""))
-_OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-_EMBEDDING_MODEL = "qwen3-embedding:0.6b"
-_TOP_K = 5
 
 
-def call_query_endpoint(question: str, backend_url: str = _BACKEND_URL) -> str:
-    """POST /query and return the generated answer string."""
+def call_query_endpoint(question: str, backend_url: str = _BACKEND_URL) -> dict:
+    """POST /query and return the full parsed JSON response."""
     response = httpx.post(
         f"{backend_url}/query",
         json={"message": question, "sessionId": None},
         timeout=60.0,
     )
     response.raise_for_status()
-    return response.json()["answer"]
-
-
-def fetch_top_k_chunks(conn, embedding: list[float], k: int = _TOP_K) -> list[str]:
-    """Run pgvector cosine similarity search and return top-k chunk contents."""
-    embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
-    with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(
-            """
-            SELECT content
-            FROM document_chunks
-            ORDER BY embedding <=> %s::vector
-            LIMIT %s
-            """,
-            (embedding_str, k),
-        )
-        return [row["content"] for row in cur.fetchall()]
+    return response.json()
 
 
 def run_rag_eval(
     qa_pairs: list[dict],
-    conn,
     backend_url: str = _BACKEND_URL,
-    ollama_url: str = _OLLAMA_URL,
 ) -> list[dict]:
     """Run the RAG pipeline for each Q&A pair."""
-    embeddings = OllamaEmbeddings(model=_EMBEDDING_MODEL, base_url=ollama_url)
     results: list[dict] = []
     total = len(qa_pairs)
     for i, pair in enumerate(qa_pairs, start=1):
         print(f"  [{i}/{total}] {pair['question'][:70]}...")
-        generated_answer = call_query_endpoint(
-            pair["question"], backend_url=backend_url
-        )
-        embedding = embeddings.embed_query(pair["question"])
-        retrieved_contexts = fetch_top_k_chunks(conn, embedding, k=_TOP_K)
+        response = call_query_endpoint(pair["question"], backend_url=backend_url)
+        generated_answer = response["answer"]
+        retrieved_contexts = response.get("retrievedContexts", [])
         results.append(
             {
                 "question": pair["question"],
@@ -155,12 +126,8 @@ def main() -> None:
         qa_pairs = json.load(f)
     validate_dataset(qa_pairs)
 
-    conn = psycopg.connect(_DB_URL)
-    try:
-        print(f"Running RAG eval on {len(qa_pairs)} Q&A pairs...")
-        results = run_rag_eval(qa_pairs, conn)
-    finally:
-        conn.close()
+    print(f"Running RAG eval on {len(qa_pairs)} Q&A pairs...")
+    results = run_rag_eval(qa_pairs)
 
     metrics: dict = {}
     if not args.skip_metrics:

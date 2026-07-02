@@ -59,6 +59,11 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
     )
 
     conflict_context = result.get("conflict_context", [])
+    retrieved_contexts = (
+        [r["content"] for r in result.get("rag_results", [])]
+        + [r["content"] for r in result.get("web_results", [])]
+        + [m["fact"] for m in result.get("retrieved_memory", [])]
+    )
     return QueryResponse(
         answer=result["final_answer"],
         sessionId=session_id,
@@ -66,4 +71,5 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         isUncertain=result["is_uncertain"],
         conflictDetected=bool(conflict_context),
         conflictContext=conflict_context,
+        retrievedContexts=retrieved_contexts,
     )

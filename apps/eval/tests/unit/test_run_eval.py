@@ -3,12 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from ragas.metrics.result import MetricResult
-from run_eval import (
-    call_query_endpoint,
-    compute_rag_metrics,
-    fetch_top_k_chunks,
-    run_rag_eval,
-)
+from run_eval import call_query_endpoint, compute_rag_metrics, run_rag_eval
 
 
 def _pair(question: str = "What is RAG?", expected: str = "RAG is cool.") -> dict:
@@ -23,7 +18,7 @@ def _pair(question: str = "What is RAG?", expected: str = "RAG is cool.") -> dic
 
 
 class TestCallQueryEndpoint:
-    def test_returns_answer_string(self):
+    def test_returns_full_response_dict(self):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
@@ -33,12 +28,14 @@ class TestCallQueryEndpoint:
             "isUncertain": False,
             "conflictDetected": False,
             "conflictContext": [],
+            "retrievedContexts": ["chunk A", "chunk B"],
         }
         with patch("run_eval.httpx.post", return_value=mock_response):
-            answer = call_query_endpoint(
+            response = call_query_endpoint(
                 "What is RAG?", backend_url="http://localhost:3001"
             )
-        assert answer == "RAG stands for Retrieval-Augmented Generation."
+        assert response["answer"] == "RAG stands for Retrieval-Augmented Generation."
+        assert response["retrievedContexts"] == ["chunk A", "chunk B"]
 
     def test_raises_on_http_error(self):
         mock_response = MagicMock()
@@ -50,95 +47,69 @@ class TestCallQueryEndpoint:
                 call_query_endpoint("Q?", backend_url="http://localhost:3001")
 
 
-class TestFetchTopKChunks:
-    def test_returns_list_of_content_strings(self):
-        mock_cursor = MagicMock()
-        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-        mock_cursor.__exit__ = MagicMock(return_value=False)
-        mock_cursor.fetchall.return_value = [
-            {"content": "Chunk A content"},
-            {"content": "Chunk B content"},
-        ]
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-
-        chunks = fetch_top_k_chunks(mock_conn, embedding=[0.1, 0.2], k=2)
-        assert chunks == ["Chunk A content", "Chunk B content"]
-
-    def test_respects_k_limit_in_query(self):
-        mock_cursor = MagicMock()
-        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-        mock_cursor.__exit__ = MagicMock(return_value=False)
-        mock_cursor.fetchall.return_value = [{"content": "Only chunk"}]
-        mock_conn = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-
-        fetch_top_k_chunks(mock_conn, embedding=[0.5], k=1)
-        call_args = mock_cursor.execute.call_args
-        assert 1 in call_args[0][1]
-
-
-def _mock_ollama(embedding: list[float]):
-    mock_cls = MagicMock()
-    mock_cls.return_value.embed_query.return_value = embedding
-    return patch("run_eval.OllamaEmbeddings", mock_cls)
-
-
 class TestRunRagEval:
     def test_returns_one_result_per_pair(self):
         pairs = [_pair("Q1?", "A1."), _pair("Q2?", "A2.")]
 
-        with (
-            patch(
-                "run_eval.call_query_endpoint",
-                side_effect=["Generated A1.", "Generated A2."],
-            ),
-            _mock_ollama([0.1, 0.2, 0.3]),
-            patch("run_eval.fetch_top_k_chunks", return_value=["ctx chunk"]),
+        with patch(
+            "run_eval.call_query_endpoint",
+            side_effect=[
+                {"answer": "Generated A1.", "retrievedContexts": ["ctx"]},
+                {"answer": "Generated A2.", "retrievedContexts": ["ctx"]},
+            ],
         ):
-            results = run_rag_eval(
-                pairs,
-                conn=MagicMock(),
-                backend_url="http://localhost:3001",
-                ollama_url="http://localhost:11434",
-            )
+            results = run_rag_eval(pairs, backend_url="http://localhost:3001")
 
         assert len(results) == 2
 
     def test_result_has_retrieved_contexts(self):
         pairs = [_pair()]
 
-        with (
-            patch("run_eval.call_query_endpoint", return_value="Answer."),
-            _mock_ollama([0.1]),
-            patch(
-                "run_eval.fetch_top_k_chunks",
-                return_value=["context 1", "context 2"],
-            ),
+        with patch(
+            "run_eval.call_query_endpoint",
+            return_value={
+                "answer": "Answer.",
+                "retrievedContexts": ["context 1", "context 2"],
+            },
         ):
-            results = run_rag_eval(
-                pairs,
-                conn=MagicMock(),
-                backend_url="http://localhost:3001",
-                ollama_url="http://localhost:11434",
-            )
+            results = run_rag_eval(pairs, backend_url="http://localhost:3001")
 
         assert results[0]["retrieved_contexts"] == ["context 1", "context 2"]
+
+    def test_retrieved_contexts_empty_list_flows_through(self):
+        """A 'neither' routing decision means no retrieval happened — the
+        response's retrievedContexts is [] and must flow through unchanged."""
+        pairs = [_pair()]
+
+        with patch(
+            "run_eval.call_query_endpoint",
+            return_value={"answer": "Answer.", "retrievedContexts": []},
+        ):
+            results = run_rag_eval(pairs, backend_url="http://localhost:3001")
+
+        assert results[0]["retrieved_contexts"] == []
+
+    def test_missing_retrieved_contexts_key_defaults_to_empty_list(self):
+        """Defensive/back-compat: if the backend response is missing the
+        retrievedContexts key entirely, run_rag_eval must not crash."""
+        pairs = [_pair()]
+
+        with patch(
+            "run_eval.call_query_endpoint",
+            return_value={"answer": "Answer."},
+        ):
+            results = run_rag_eval(pairs, backend_url="http://localhost:3001")
+
+        assert results[0]["retrieved_contexts"] == []
 
     def test_result_keys_are_complete(self):
         pairs = [_pair()]
 
-        with (
-            patch("run_eval.call_query_endpoint", return_value="A."),
-            _mock_ollama([0.1]),
-            patch("run_eval.fetch_top_k_chunks", return_value=["ctx"]),
+        with patch(
+            "run_eval.call_query_endpoint",
+            return_value={"answer": "A.", "retrievedContexts": ["ctx"]},
         ):
-            results = run_rag_eval(
-                pairs,
-                conn=MagicMock(),
-                backend_url="http://localhost:3001",
-                ollama_url="http://localhost:11434",
-            )
+            results = run_rag_eval(pairs, backend_url="http://localhost:3001")
 
         r = results[0]
         assert "question" in r
