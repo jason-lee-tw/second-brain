@@ -241,3 +241,150 @@ async def test_synthesize_answer_trims_messages_to_last_10():
     # Earlier messages should NOT be in conversation history
     assert "Question 0" not in prompt_text
     assert "Question 1" not in prompt_text
+
+
+# ---------------------------------------------------------------------------
+# context_used: single source of truth for grounding text fed to the LLM
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_synthesize_answer_context_used_rag_only():
+    """context_used contains the raw RAG chunk content (no per-item annotation)."""
+    mock_output = _make_synthesis_output(
+        final_answer="answer", confidence=0.9, reasoning="ok"
+    )
+    state = make_state(
+        messages=[HumanMessage(content="query")],
+        routing_decision="rag",
+        rag_results=[
+            {
+                "content": "Paris is the capital.",
+                "score": 0.95,
+                "chunk_index": 0,
+                "metadata": {},
+            }
+        ],
+    )
+
+    with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+        mock_llm.ainvoke = AsyncMock(return_value=mock_output)
+        from second_brain.nodes.synthesis import synthesize_answer
+
+        result = await synthesize_answer(state)
+
+    assert result["context_used"] == ["Paris is the capital."]
+
+
+@pytest.mark.asyncio
+async def test_synthesize_answer_context_used_web_only():
+    """context_used contains the formatted **title** (url)\\ncontent string."""
+    mock_output = _make_synthesis_output(
+        final_answer="answer", confidence=0.9, reasoning="ok"
+    )
+    state = make_state(
+        messages=[HumanMessage(content="query")],
+        routing_decision="web",
+        web_results=[
+            {"title": "News", "url": "http://example.com", "content": "Some news."}
+        ],
+    )
+
+    with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+        mock_llm.ainvoke = AsyncMock(return_value=mock_output)
+        from second_brain.nodes.synthesis import synthesize_answer
+
+        result = await synthesize_answer(state)
+
+    assert result["context_used"] == ["**News** (http://example.com)\nSome news."]
+
+
+@pytest.mark.asyncio
+async def test_synthesize_answer_context_used_memory_only():
+    """context_used contains the formatted "- fact (confidence: X.XX)" string."""
+    mock_output = _make_synthesis_output(
+        final_answer="answer", confidence=0.9, reasoning="ok"
+    )
+    state = make_state(
+        messages=[HumanMessage(content="query")],
+        routing_decision="neither",
+        retrieved_memory=[
+            {
+                "id": "1",
+                "fact": "User likes Paris.",
+                "confidence": 0.8,
+                "type": "learned_fact",
+            }
+        ],
+    )
+
+    with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+        mock_llm.ainvoke = AsyncMock(return_value=mock_output)
+        from second_brain.nodes.synthesis import synthesize_answer
+
+        result = await synthesize_answer(state)
+
+    assert result["context_used"] == ["- User likes Paris. (confidence: 0.80)"]
+
+
+@pytest.mark.asyncio
+async def test_synthesize_answer_context_used_combines_all_three_in_order():
+    """context_used concatenates rag -> web -> memory, in that order."""
+    mock_output = _make_synthesis_output(
+        final_answer="answer", confidence=0.9, reasoning="ok"
+    )
+    state = make_state(
+        messages=[HumanMessage(content="query")],
+        routing_decision="both",
+        rag_results=[
+            {
+                "content": "RAG chunk.",
+                "score": 0.9,
+                "chunk_index": 0,
+                "metadata": {},
+            }
+        ],
+        web_results=[
+            {"title": "Title", "url": "http://x.com", "content": "Web content."}
+        ],
+        retrieved_memory=[
+            {
+                "id": "1",
+                "fact": "A fact.",
+                "confidence": 0.5,
+                "type": "learned_fact",
+            }
+        ],
+    )
+
+    with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+        mock_llm.ainvoke = AsyncMock(return_value=mock_output)
+        from second_brain.nodes.synthesis import synthesize_answer
+
+        result = await synthesize_answer(state)
+
+    assert result["context_used"] == [
+        "RAG chunk.",
+        "**Title** (http://x.com)\nWeb content.",
+        "- A fact. (confidence: 0.50)",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_synthesize_answer_context_used_empty_when_no_context():
+    """context_used is an empty list when no rag/web/memory context is present."""
+    mock_output = _make_synthesis_output(
+        final_answer="answer", confidence=0.5, reasoning="ok"
+    )
+    state = make_state(
+        messages=[HumanMessage(content="query")],
+        routing_decision="neither",
+    )
+
+    with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+        mock_llm.ainvoke = AsyncMock(return_value=mock_output)
+        from second_brain.nodes.synthesis import synthesize_answer
+
+        result = await synthesize_answer(state)
+
+    assert result["context_used"] == []

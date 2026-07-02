@@ -46,11 +46,13 @@ async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
     routing = state.get("routing_decision", "neither")
 
     # Build context sections
+    chunks: list[str] = []
     rag_context = ""
     if state.get("rag_results"):
         chunks = [r["content"] for r in state["rag_results"]]
         rag_context = "### RAG Context\n" + "\n---\n".join(chunks)
 
+    items: list[str] = []
     web_context = ""
     if state.get("web_results"):
         items = [
@@ -59,6 +61,7 @@ async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
         ]
         web_context = "### Web Research\n" + "\n---\n".join(items)
 
+    facts: list[str] = []
     memory_context = ""
     if state.get("retrieved_memory"):
         facts = [
@@ -66,6 +69,8 @@ async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
             for m in state["retrieved_memory"]
         ]
         memory_context = "### Memory\n" + "\n".join(facts)
+
+    context_used = chunks + items + facts
 
     # Use only the last 10 messages (excluding the current query) for history
     conversation_history = _format_messages(state["messages"][-11:-1])
@@ -103,5 +108,6 @@ async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
         "final_answer": output.final_answer,
         "confidence": confidence,
         "is_uncertain": is_uncertain,
+        "context_used": context_used,
         # ponytail: awaiting_correction is set by memory_persistence_node, not here
     }

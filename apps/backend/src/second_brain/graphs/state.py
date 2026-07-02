@@ -95,6 +95,7 @@ class SecondBrainState(TypedDict):
     conflict_context: NotRequired[list[ConflictContext]]  # Ticket 5: memory-correction
     fact_updates: NotRequired[list[FactUpdate]]  # Ticket 5: memory-correction
     correction_updates: NotRequired[list[CorrectionUpdate]]  # T5: memory-correction
+    context_used: NotRequired[list[str]]  # exact grounding strings synthesis used
 
 
 # ---------------------------------------------------------------------------
@@ -142,3 +143,4 @@ class SynthesisNodeOutput(TypedDict):
     final_answer: str
     confidence: float
     is_uncertain: bool
+    context_used: list[str]

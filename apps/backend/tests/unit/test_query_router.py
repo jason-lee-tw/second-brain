@@ -93,15 +93,17 @@ def _base_graph_result() -> dict:
     }
 
 
-def test_retrieved_contexts_flattens_rag_web_and_memory_results():
-    """retrievedContexts concatenates rag_results, web_results, and
-    retrieved_memory content — in that order — from the graph's raw output."""
+def test_retrieved_contexts_is_pass_through_of_context_used():
+    """retrievedContexts is a straight pass-through of the graph's context_used —
+    the single source of truth for what synthesis actually grounded the answer on."""
     mock_graph = AsyncMock()
     mock_graph.ainvoke.return_value = {
         **_base_graph_result(),
-        "rag_results": [{"content": "Paris is the capital of France."}],
-        "web_results": [{"content": "France is a country in Europe."}],
-        "retrieved_memory": [{"fact": "User is planning a trip to Paris."}],
+        "context_used": [
+            "Paris is the capital of France.",
+            "**Europe** (http://example.com)\nFrance is a country in Europe.",
+            "- User is planning a trip to Paris. (confidence: 0.80)",
+        ],
         "conflict_context": [],
     }
 
@@ -112,6 +114,6 @@ def test_retrieved_contexts_flattens_rag_web_and_memory_results():
     assert response.status_code == 200
     assert response.json()["retrievedContexts"] == [
         "Paris is the capital of France.",
-        "France is a country in Europe.",
-        "User is planning a trip to Paris.",
+        "**Europe** (http://example.com)\nFrance is a country in Europe.",
+        "- User is planning a trip to Paris. (confidence: 0.80)",
     ]

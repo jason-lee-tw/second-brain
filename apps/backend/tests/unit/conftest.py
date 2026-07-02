@@ -22,6 +22,7 @@ def make_state(**overrides) -> SecondBrainState:
         "conflict_context": [],
         "fact_updates": [],
         "correction_updates": [],
+        "context_used": [],
     }
     defaults.update(overrides)  # type: ignore[typeddict-item]
     return defaults

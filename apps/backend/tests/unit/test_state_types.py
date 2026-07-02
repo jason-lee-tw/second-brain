@@ -284,9 +284,11 @@ def test_synthesis_node_output():
         "final_answer": "42",
         "confidence": 0.9,
         "is_uncertain": False,
+        "context_used": ["some context"],
     }
     assert out["final_answer"] == "42"
     assert not out["is_uncertain"]
+    assert out["context_used"] == ["some context"]
 
 
 def test_rag_result_metadata_is_typed():
