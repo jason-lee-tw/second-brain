@@ -137,10 +137,11 @@ class TestSmokeBaseline:
                 return_value=mock_metric(_BASELINE_METRICS["answer_relevancy"]),
             ),
         ):
-            metrics = compute_baseline_metrics(results)
+            metrics, sample_counts = compute_baseline_metrics(results)
         assert "faithfulness" in metrics
         assert "answer_relevancy" in metrics
         assert "context_recall" not in metrics
+        assert sample_counts == {"faithfulness": 3, "answer_relevancy": 3}
 
 
 def _mock_query_responses(
@@ -201,12 +202,18 @@ class TestSmokeRagEval:
                 return_value=mock_metric(_RAG_METRICS["answer_relevancy"]),
             ),
         ):
-            metrics = compute_rag_metrics(results)
+            metrics, sample_counts = compute_rag_metrics(results)
         assert set(metrics.keys()) == {
             "context_recall",
             "context_precision",
             "faithfulness",
             "answer_relevancy",
+        }
+        assert sample_counts == {
+            "context_recall": 3,
+            "context_precision": 3,
+            "faithfulness": 3,
+            "answer_relevancy": 3,
         }
 
 

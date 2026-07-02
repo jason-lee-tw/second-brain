@@ -53,10 +53,13 @@ just eval-baseline dataset=apps/eval/dataset/qa_pairs.json output=apps/eval/resu
 
 > **Note:** Baseline `faithfulness` uses `expected_answer` as proxy retrieved context — it measures
 > consistency with ground truth, not document grounding. Use the delta vs RAG to assess retrieval benefit.
+> Each printed/saved metric also reports a sample count (e.g. `18/20 samples scored`) — a NaN score
+> (scoring exception) is dropped from the mean, so the count shows how
+> many samples actually contributed.
 
 ### Step 4 — Run the RAG evaluation
 
-Calls the `/query` endpoint and reads the `retrievedContexts` field directly from that response — the RAG chunks, web results, and memory facts the backend itself used to ground the answer (routing may skip RAG entirely, and memory facts always blend in, so re-querying pgvector separately would measure the wrong context). Measures all four RAGAS metrics against that grounding context.
+Calls the `/query` endpoint and reads the `retrievedContexts` field directly from that response — the RAG chunks, web results, and memory facts the backend itself used to ground the answer (routing may skip RAG entirely, and memory facts always blend in, so re-querying pgvector separately would measure the wrong context). Measures all four RAGAS metrics against that grounding context. Each metric's printed/saved value is paired with a sample count showing how many of the dataset's samples actually scored (non-NaN) — a NaN score (scoring exception, or empty `retrieved_contexts` when routing skips retrieval) is dropped from the mean.
 
 ```bash
 just eval-rag

@@ -83,9 +83,10 @@ class TestComputeBaselineMetrics:
             patch("baseline.Faithfulness", return_value=mock_metric(0.85)),
             patch("baseline.AnswerRelevancy", return_value=mock_metric(0.90)),
         ):
-            metrics = compute_baseline_metrics(results)
+            metrics, sample_counts = compute_baseline_metrics(results)
 
         assert metrics == {"faithfulness": 0.85, "answer_relevancy": 0.9}
+        assert sample_counts == {"faithfulness": 1, "answer_relevancy": 1}
 
     def test_metrics_are_rounded_to_4_decimal_places(self, mock_metric):
         results = [
@@ -97,7 +98,7 @@ class TestComputeBaselineMetrics:
             patch("baseline.Faithfulness", return_value=mock_metric(0.856789123)),
             patch("baseline.AnswerRelevancy", return_value=mock_metric(0.901234567)),
         ):
-            metrics = compute_baseline_metrics(results)
+            metrics, _ = compute_baseline_metrics(results)
 
         assert metrics["faithfulness"] == round(0.856789123, 4)
         assert metrics["answer_relevancy"] == round(0.901234567, 4)
@@ -113,12 +114,12 @@ class TestComputeBaselineMetrics:
             patch("baseline.Faithfulness", return_value=mock_metric(0.80)),
             patch("baseline.AnswerRelevancy", return_value=mock_metric(0.75)),
         ):
-            metrics = compute_baseline_metrics(results)
+            metrics, _ = compute_baseline_metrics(results)
 
         assert "context_recall" not in metrics
         assert "context_precision" not in metrics
 
-    def test_nan_metric_returns_none(self, mock_metric):
+    def test_nan_metric_returns_none_and_zero_count(self, mock_metric):
         results = [
             {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
         ]
@@ -128,14 +129,17 @@ class TestComputeBaselineMetrics:
             patch("baseline.Faithfulness", return_value=mock_metric(float("nan"))),
             patch("baseline.AnswerRelevancy", return_value=mock_metric(0.80)),
         ):
-            metrics = compute_baseline_metrics(results)
+            metrics, sample_counts = compute_baseline_metrics(results)
 
         assert metrics["faithfulness"] is None
         assert metrics["answer_relevancy"] == 0.8
+        assert sample_counts["faithfulness"] == 0
+        assert sample_counts["answer_relevancy"] == 1
 
     def test_metric_exception_for_one_sample_does_not_lose_others(self, mock_metric):
         """A failing .ascore() call becomes NaN and is excluded from the mean,
-        matching the old evaluate(raise_exceptions=False) behavior."""
+        matching the old evaluate(raise_exceptions=False) behavior. The sample
+        count reflects only the samples that actually scored."""
         results = [
             {"question": "Q1?", "generated_answer": "A1.", "expected_answer": "A1."},
             {"question": "Q2?", "generated_answer": "A2.", "expected_answer": "A2."},
@@ -150,7 +154,26 @@ class TestComputeBaselineMetrics:
             patch("baseline.Faithfulness", return_value=faithfulness_metric),
             patch("baseline.AnswerRelevancy", return_value=mock_metric(0.8)),
         ):
-            metrics = compute_baseline_metrics(results)
+            metrics, sample_counts = compute_baseline_metrics(results)
 
         assert metrics["faithfulness"] == 0.9
         assert metrics["answer_relevancy"] == 0.8
+        assert sample_counts["faithfulness"] == 1
+        assert sample_counts["answer_relevancy"] == 2
+
+    def test_all_nan_metric_has_zero_count_and_none_mean(self, mock_metric):
+        results = [
+            {"question": "Q?", "generated_answer": "A.", "expected_answer": "A."}
+        ]
+        with (
+            patch("baseline.build_llm"),
+            patch("baseline.build_embeddings"),
+            patch("baseline.Faithfulness", return_value=mock_metric(float("nan"))),
+            patch("baseline.AnswerRelevancy", return_value=mock_metric(float("nan"))),
+        ):
+            metrics, sample_counts = compute_baseline_metrics(results)
+
+        assert metrics["faithfulness"] is None
+        assert metrics["answer_relevancy"] is None
+        assert sample_counts["faithfulness"] == 0
+        assert sample_counts["answer_relevancy"] == 0

@@ -43,6 +43,11 @@ def safe_mean(values: list[float]) -> float | None:
     return round(sum(clean) / len(clean), 4) if clean else None
 
 
+def sample_count(values: list[float]) -> int:
+    """Count of non-NaN scores that actually contributed to safe_mean(values)."""
+    return sum(1 for v in values if not math.isnan(v))
+
+
 async def score_or_nan(metric, **kwargs) -> float:
     """Score one sample; log and return NaN on failure so one bad sample
     doesn't lose the rest."""

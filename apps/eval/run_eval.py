@@ -17,7 +17,13 @@ from ragas.metrics.collections import (
     ContextRecall,
     Faithfulness,
 )
-from ragas_client import build_embeddings, build_llm, safe_mean, score_or_nan
+from ragas_client import (
+    build_embeddings,
+    build_llm,
+    safe_mean,
+    sample_count,
+    score_or_nan,
+)
 from schema import validate_dataset
 
 _BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:3001")
@@ -110,10 +116,17 @@ async def _score_all(results: list[dict]) -> dict[str, list[float]]:
     return scores
 
 
-def compute_rag_metrics(results: list[dict]) -> dict:
-    """Run all four RAGAS metrics on RAG pipeline results."""
+def compute_rag_metrics(results: list[dict]) -> tuple[dict, dict]:
+    """Run all four RAGAS metrics on RAG pipeline results.
+
+    Returns (metrics, sample_counts): metrics maps each metric name to its
+    mean (None if every sample was NaN); sample_counts maps each metric name
+    to how many of the samples actually contributed a non-NaN score.
+    """
     scores = asyncio.run(_score_all(results))
-    return {name: safe_mean(values) for name, values in scores.items()}
+    metrics = {name: safe_mean(values) for name, values in scores.items()}
+    counts = {name: sample_count(values) for name, values in scores.items()}
+    return metrics, counts
 
 
 def main() -> None:
@@ -133,15 +146,16 @@ def main() -> None:
     results = run_rag_eval(qa_pairs)
 
     metrics: dict = {}
+    sample_counts: dict = {}
     if not args.skip_metrics:
         print("Computing RAGAS metrics (all 4)...")
-        metrics = compute_rag_metrics(results)
-        print(f"  context_recall:    {metrics['context_recall']}")
-        print(f"  context_precision: {metrics['context_precision']}")
-        print(f"  faithfulness:      {metrics['faithfulness']}")
-        print(f"  answer_relevancy:  {metrics['answer_relevancy']}")
+        metrics, sample_counts = compute_rag_metrics(results)
+        total = len(results)
+        for name, value in metrics.items():
+            n = sample_counts[name]
+            print(f"  {name + ':':<19}{value}  ({n}/{total} samples scored)")
 
-    output = {"metrics": metrics, "results": results}
+    output = {"metrics": metrics, "sample_counts": sample_counts, "results": results}
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:

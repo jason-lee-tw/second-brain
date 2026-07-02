@@ -9,7 +9,13 @@ from pathlib import Path
 
 import anthropic
 from ragas.metrics.collections import AnswerRelevancy, Faithfulness
-from ragas_client import build_embeddings, build_llm, safe_mean, score_or_nan
+from ragas_client import (
+    build_embeddings,
+    build_llm,
+    safe_mean,
+    sample_count,
+    score_or_nan,
+)
 from schema import validate_dataset
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -71,14 +77,20 @@ async def _score_all(results: list[dict]) -> dict[str, list[float]]:
     return {"faithfulness": faithfulness_scores, "answer_relevancy": relevancy_scores}
 
 
-def compute_baseline_metrics(results: list[dict]) -> dict:
+def compute_baseline_metrics(results: list[dict]) -> tuple[dict, dict]:
     """Run RAGAS faithfulness and answer_relevancy on baseline results.
 
     Uses expected_answer as proxy retrieved_contexts — measures whether the
     model's no-RAG answer is consistent with ground truth (baseline for comparison).
+
+    Returns (metrics, sample_counts): metrics maps each metric name to its
+    mean (None if every sample was NaN); sample_counts maps each metric name
+    to how many of the samples actually contributed a non-NaN score.
     """
     scores = asyncio.run(_score_all(results))
-    return {name: safe_mean(values) for name, values in scores.items()}
+    metrics = {name: safe_mean(values) for name, values in scores.items()}
+    counts = {name: sample_count(values) for name, values in scores.items()}
+    return metrics, counts
 
 
 def main() -> None:
@@ -102,13 +114,16 @@ def main() -> None:
     results = run_baseline(qa_pairs, client)
 
     metrics: dict = {}
+    sample_counts: dict = {}
     if not args.skip_metrics:
         print("Computing RAGAS metrics (faithfulness, answer_relevancy)...")
-        metrics = compute_baseline_metrics(results)
-        print(f"  faithfulness:     {metrics['faithfulness']}")
-        print(f"  answer_relevancy: {metrics['answer_relevancy']}")
+        metrics, sample_counts = compute_baseline_metrics(results)
+        total = len(results)
+        for name, value in metrics.items():
+            n = sample_counts[name]
+            print(f"  {name + ':':<19}{value}  ({n}/{total} samples scored)")
 
-    output = {"metrics": metrics, "results": results}
+    output = {"metrics": metrics, "sample_counts": sample_counts, "results": results}
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:

@@ -23,6 +23,20 @@ class TestSafeMean:
         assert ragas_client.safe_mean(values) == round(sum(values) / len(values), 4)
 
 
+class TestSampleCount:
+    def test_counts_all_valid_scores(self):
+        assert ragas_client.sample_count([0.8, 0.9, 1.0]) == 3
+
+    def test_excludes_nan_values_from_count(self):
+        assert ragas_client.sample_count([0.8, float("nan"), 1.0]) == 2
+
+    def test_all_nan_returns_zero(self):
+        assert ragas_client.sample_count([float("nan"), float("nan")]) == 0
+
+    def test_empty_list_returns_zero(self):
+        assert ragas_client.sample_count([]) == 0
+
+
 class TestBuildLlm:
     def test_uses_anthropic_provider_and_judge_model(self):
         with (
