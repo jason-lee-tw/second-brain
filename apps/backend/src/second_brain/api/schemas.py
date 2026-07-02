@@ -28,4 +28,4 @@ class QueryResponse(BaseModel):
     isUncertain: bool
     conflictDetected: bool
     conflictContext: list[ConflictContextItem]
-    retrievedContexts: list[str] = []
+    retrievedContexts: list[str]
