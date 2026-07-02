@@ -20,9 +20,9 @@ from ragas.metrics.collections import (
 from ragas_client import (
     build_embeddings,
     build_llm,
-    safe_mean,
-    sample_count,
+    print_metric_summary,
     score_or_nan,
+    summarize_scores,
 )
 from schema import validate_dataset
 
@@ -124,9 +124,7 @@ def compute_rag_metrics(results: list[dict]) -> tuple[dict, dict]:
     to how many of the samples actually contributed a non-NaN score.
     """
     scores = asyncio.run(_score_all(results))
-    metrics = {name: safe_mean(values) for name, values in scores.items()}
-    counts = {name: sample_count(values) for name, values in scores.items()}
-    return metrics, counts
+    return summarize_scores(scores)
 
 
 def main() -> None:
@@ -150,10 +148,7 @@ def main() -> None:
     if not args.skip_metrics:
         print("Computing RAGAS metrics (all 4)...")
         metrics, sample_counts = compute_rag_metrics(results)
-        total = len(results)
-        for name, value in metrics.items():
-            n = sample_counts[name]
-            print(f"  {name + ':':<19}{value}  ({n}/{total} samples scored)")
+        print_metric_summary(metrics, sample_counts, len(qa_pairs))
 
     output = {"metrics": metrics, "sample_counts": sample_counts, "results": results}
     output_path = Path(args.output)

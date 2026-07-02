@@ -48,6 +48,25 @@ def sample_count(values: list[float]) -> int:
     return sum(1 for v in values if not math.isnan(v))
 
 
+def summarize_scores(
+    scores: dict[str, list[float]],
+) -> tuple[dict[str, float | None], dict[str, int]]:
+    """Reduce per-metric score lists to (metrics, sample_counts) via
+    safe_mean/sample_count."""
+    metrics = {name: safe_mean(values) for name, values in scores.items()}
+    counts = {name: sample_count(values) for name, values in scores.items()}
+    return metrics, counts
+
+
+def print_metric_summary(
+    metrics: dict[str, float | None], sample_counts: dict[str, int], total: int
+) -> None:
+    """Print one line per metric: name, mean, and how many samples scored."""
+    for name, value in metrics.items():
+        n = sample_counts[name]
+        print(f"  {name + ':':<19}{value}  ({n}/{total} samples scored)")
+
+
 async def score_or_nan(metric, **kwargs) -> float:
     """Score one sample; log and return NaN on failure so one bad sample
     doesn't lose the rest."""

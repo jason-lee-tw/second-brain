@@ -37,6 +37,67 @@ class TestSampleCount:
         assert ragas_client.sample_count([]) == 0
 
 
+class TestSummarizeScores:
+    def test_happy_path_averages_and_counts(self):
+        scores = {
+            "faithfulness": [0.8, 0.9, 1.0],
+            "answer_relevancy": [0.5, 0.7],
+        }
+
+        metrics, sample_counts = ragas_client.summarize_scores(scores)
+
+        assert metrics == {
+            "faithfulness": ragas_client.safe_mean([0.8, 0.9, 1.0]),
+            "answer_relevancy": ragas_client.safe_mean([0.5, 0.7]),
+        }
+        assert sample_counts == {"faithfulness": 3, "answer_relevancy": 2}
+
+    def test_partial_nan_excluded_from_mean_and_count(self):
+        scores = {"faithfulness": [0.8, float("nan"), 1.0]}
+
+        metrics, sample_counts = ragas_client.summarize_scores(scores)
+
+        assert metrics == {"faithfulness": round(0.9, 4)}
+        assert sample_counts == {"faithfulness": 2}
+
+    def test_all_nan_returns_none_mean_and_zero_count(self):
+        scores = {"faithfulness": [float("nan"), float("nan")]}
+
+        metrics, sample_counts = ragas_client.summarize_scores(scores)
+
+        assert metrics == {"faithfulness": None}
+        assert sample_counts == {"faithfulness": 0}
+
+    def test_empty_scores_dict_returns_empty_dicts(self):
+        metrics, sample_counts = ragas_client.summarize_scores({})
+
+        assert metrics == {}
+        assert sample_counts == {}
+
+
+class TestPrintMetricSummary:
+    def test_prints_one_line_per_metric_with_expected_format(self, capsys):
+        metrics = {"faithfulness": 0.9, "answer_relevancy": 0.85}
+        sample_counts = {"faithfulness": 3, "answer_relevancy": 2}
+
+        ragas_client.print_metric_summary(metrics, sample_counts, total=3)
+
+        captured = capsys.readouterr()
+        assert captured.out == (
+            "  faithfulness:      0.9  (3/3 samples scored)\n"
+            "  answer_relevancy:  0.85  (2/3 samples scored)\n"
+        )
+
+    def test_none_mean_prints_none(self, capsys):
+        metrics = {"faithfulness": None}
+        sample_counts = {"faithfulness": 0}
+
+        ragas_client.print_metric_summary(metrics, sample_counts, total=2)
+
+        captured = capsys.readouterr()
+        assert captured.out == "  faithfulness:      None  (0/2 samples scored)\n"
+
+
 class TestBuildLlm:
     def test_uses_anthropic_provider_and_judge_model(self):
         with (
