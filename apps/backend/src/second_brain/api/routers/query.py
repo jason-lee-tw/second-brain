@@ -52,6 +52,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
         "final_answer": "",
         "confidence": 0.0,
         "is_uncertain": False,
+        "context_used": [],
     }
     result = await graph.ainvoke(
         input_state,  # pyright: ignore[reportArgumentType]
@@ -59,7 +60,7 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
     )
 
     conflict_context = result.get("conflict_context", [])
-    retrieved_contexts = result.get("context_used", [])
+    retrieved_contexts = result["context_used"]
     return QueryResponse(
         answer=result["final_answer"],
         sessionId=session_id,

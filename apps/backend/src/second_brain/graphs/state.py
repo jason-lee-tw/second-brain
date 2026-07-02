@@ -90,12 +90,14 @@ class SecondBrainState(TypedDict):
     final_answer: str
     confidence: float
     is_uncertain: bool
+    context_used: list[str]  # exact grounding strings synthesis used
+    # Genuinely optional -- set only by conditional correction/conflict nodes.
+    # New keys belong here only if some routing branch can skip setting them.
     awaiting_correction: NotRequired[bool]  # Ticket 5: memory-correction
     awaiting_conflict_clarification: NotRequired[bool]  # Ticket 5: memory-correction
     conflict_context: NotRequired[list[ConflictContext]]  # Ticket 5: memory-correction
     fact_updates: NotRequired[list[FactUpdate]]  # Ticket 5: memory-correction
     correction_updates: NotRequired[list[CorrectionUpdate]]  # T5: memory-correction
-    context_used: NotRequired[list[str]]  # exact grounding strings synthesis used
 
 
 # ---------------------------------------------------------------------------
