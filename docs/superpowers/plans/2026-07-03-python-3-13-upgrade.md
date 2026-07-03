@@ -147,7 +147,7 @@ git commit -m "config: upgrade Python 3.12 to 3.13"
 **Interfaces:**
 
 - Consumes: the 3.13 `.venv` and `uv.lock` produced by Task 1.
-- Produces: confirmation that lint, format, type-check, and unit tests are green under 3.13 — a precondition for Task 3.
+- Produces: confirmation that lint, format, type-check, and unit tests — for both `apps/backend` and `apps/eval` — are green under 3.13, a precondition for Task 3.
 
 - [ ] **Step 1: Run lint**
 
@@ -164,14 +164,19 @@ Expected: `git status --porcelain` prints nothing (ruff format made no changes �
 Run: `just type-check`
 Expected: output ends with `✅ Type check is completed` and no error/warning lines from basedpyright.
 
-- [ ] **Step 4: Run unit tests**
+- [ ] **Step 4: Run backend unit tests**
 
 Run: `just test-unit`
 Expected: pytest summary line showing all tests passed, e.g. `N passed in Xs`, exit code 0.
 
-- [ ] **Step 5: If any of Steps 1–4 fail**
+- [ ] **Step 5: Run eval unit tests**
 
-Do not proceed to Task 3. Diagnose using `superpowers:systematic-debugging` — a failure here means either a 3.13 behavior change surfaced (e.g. a stdlib deprecation now an error) or a resolved dependency version changed behavior. Fix the root cause in application code, re-run the failing command, then continue. Do not weaken lint/type-check rules to paper over the failure.
+Run: `just test-eval`
+Expected: pytest summary line showing all tests passed, exit code 0. `apps/eval`'s `requires-python` was also bumped in Task 1 and it shares the same regenerated `.venv`/`uv.lock` as backend, so it needs the same confirmation — `just test-unit` alone does not cover it.
+
+- [ ] **Step 6: If any of Steps 1–5 fail**
+
+Do not proceed to Task 3. Diagnose using `superpowers:systematic-debugging` — a failure here means either a 3.13 behavior change surfaced (e.g. a stdlib deprecation now an error) or a resolved dependency version changed behavior. Fix the root cause in application code, re-run the failing command, then continue. Commit the fix as a new commit — do not amend Task 1's commit (per this project's CLAUDE.md: always create new commits rather than amending). Do not weaken lint/type-check rules to paper over the failure.
 
 ---
 
