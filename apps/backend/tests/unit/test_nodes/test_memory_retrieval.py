@@ -176,6 +176,55 @@ async def test_threshold_applied_to_sql_queries():
 
 
 @pytest.mark.asyncio
+async def test_threshold_binds_precomputed_max_distance_not_raw_threshold():
+    """Regression (R1-1): SQL must bind max_distance=1-threshold in Python, not do
+    `(1 - $2)` arithmetic on an untyped bind param in Postgres.
+
+    Postgres infers an untyped bind param from surrounding int arithmetic (`1 - $2`)
+    as `integer`, truncating a float threshold like 0.95 to 0. Using a threshold of
+    0.9 (max_distance=0.1) distinguishes the two: with the bug, $2 == 0.9 and the SQL
+    still contains the literal `(1 - $2)`; fixed, $2 == 0.1 and the WHERE clause binds
+    the distance directly.
+    """
+    mock_conn = AsyncMock()
+    mock_conn.fetch = AsyncMock(side_effect=[[], []])
+
+    mock_pool = MagicMock()
+    mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch(
+            "second_brain.nodes.memory_retrieval.embed_text",
+            new_callable=AsyncMock,
+            return_value=[0.1] * 1024,
+        ),
+        patch(
+            "second_brain.nodes.memory_retrieval.get_pgvector_pool",
+            new_callable=AsyncMock,
+            return_value=mock_pool,
+        ),
+        patch(
+            "second_brain.nodes.memory_retrieval.settings.memory_retrieval_threshold",
+            0.9,
+        ),
+    ):
+        await memory_retrieval_node(_make_state())
+
+    calls = mock_conn.fetch.call_args_list
+    assert len(calls) == 2, f"Expected 2 fetch calls, got {len(calls)}"
+
+    for i, call in enumerate(calls):
+        sql = call.args[0]
+        assert "(1 - $2)" not in sql, (
+            f"Call {i}: SQL still does in-DB arithmetic on the bind param: {sql}"
+        )
+        assert call.args[2] == pytest.approx(0.1), (
+            f"Call {i}: expected bound max_distance 0.1 (1 - 0.9), got {call.args[2]}"
+        )
+
+
+@pytest.mark.asyncio
 async def test_threshold_excludes_low_similarity_corrections():
     """Corrections below threshold are excluded by the WHERE clause.
 

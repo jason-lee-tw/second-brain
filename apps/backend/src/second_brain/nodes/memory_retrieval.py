@@ -17,14 +17,15 @@ from second_brain.utils import get_str_content, last_human_message
 async def _search_facts(
     pool: asyncpg.Pool, embedding: list[float]
 ) -> list[tuple[float, MemoryItem]]:
+    max_distance = 1 - settings.memory_retrieval_threshold
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id::text, fact, confidence, 1-(embedding<=>$1) AS score"
             " FROM learned_facts"
-            " WHERE (embedding<=>$1) < (1 - $2)"
+            " WHERE (embedding<=>$1) < $2"
             " ORDER BY embedding<=>$1 ASC LIMIT 5",
             embedding,
-            settings.memory_retrieval_threshold,
+            max_distance,
         )
         return [
             (
@@ -43,14 +44,15 @@ async def _search_facts(
 async def _search_corrections(
     pool: asyncpg.Pool, embedding: list[float]
 ) -> list[tuple[float, MemoryItem]]:
+    max_distance = 1 - settings.memory_retrieval_threshold
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id::text, correction AS fact, 1-(embedding<=>$1) AS score"
             " FROM model_corrections"
-            " WHERE (embedding<=>$1) < (1 - $2)"
+            " WHERE (embedding<=>$1) < $2"
             " ORDER BY embedding<=>$1 ASC LIMIT 3",
             embedding,
-            settings.memory_retrieval_threshold,
+            max_distance,
         )
         return [
             (
