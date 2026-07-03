@@ -28,15 +28,16 @@ _MAX_RETRIES = 3
 async def _conflict_check(embedding: list[float]) -> list[dict[str, Any]]:
     """Return rows from learned_facts whose cosine similarity exceeds threshold."""
     threshold = settings.memory_conflict_threshold
+    max_distance = 1 - threshold
     pool = await get_pgvector_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id::text, fact, 1-(embedding<=>$1) AS score"
             " FROM learned_facts"
-            " WHERE (embedding<=>$1) < (1 - $2)"
+            " WHERE (embedding<=>$1) < $2"
             " ORDER BY embedding<=>$1 ASC LIMIT 5",
             embedding,
-            threshold,
+            max_distance,
         )
         return [dict(r) for r in rows]
 
