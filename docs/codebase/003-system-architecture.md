@@ -10,7 +10,7 @@ A personal "Second Brain" knowledge management system built with FastAPI, LangGr
 
 | Component            | Technology                                                    |
 | -------------------- | ------------------------------------------------------------- |
-| Language             | Python 3.12                                                   |
+| Language             | Python 3.13                                                   |
 | Web framework        | FastAPI                                                       |
 | Agent orchestration  | LangGraph                                                     |
 | Database             | PostgreSQL + pgvector (Docker)                                |

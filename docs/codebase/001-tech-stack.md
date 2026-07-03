@@ -2,7 +2,7 @@
 
 | Component            | Technology                                                                         |
 | -------------------- | ---------------------------------------------------------------------------------- |
-| Language             | Python 3.12                                                                        |
+| Language             | Python 3.13                                                                        |
 | Web framework        | FastAPI                                                                            |
 | Agent orchestration  | LangGraph                                                                          |
 | Database             | PostgreSQL 16 + pgvector                                                           |
