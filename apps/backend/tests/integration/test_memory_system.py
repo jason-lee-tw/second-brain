@@ -12,7 +12,8 @@ import os
 import uuid
 
 import pytest
-from sqlalchemy import create_engine, text
+from pgvector.psycopg2 import register_vector
+from sqlalchemy import create_engine, event, text
 
 _DATABASE_URL = os.environ.get("DATABASE_URL", "")
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
@@ -32,6 +33,12 @@ def db_engine():
     # Strip asyncpg driver suffix — sync SQLAlchemy doesn't support it
     sync_url = url.replace("+asyncpg", "")
     engine = create_engine(sync_url)
+    # Raw text() queries need the vector codec registered explicitly —
+    # SQLModel's ORM path gets it for free from pgvector.sqlalchemy.Vector,
+    # but this fixture reads back rows outside the ORM.
+    event.listens_for(engine, "connect")(
+        lambda dbapi_conn, _: register_vector(dbapi_conn)
+    )
     yield engine
     engine.dispose()
 
