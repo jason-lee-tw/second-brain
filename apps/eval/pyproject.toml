@@ -1,7 +1,7 @@
 [project]
 name = "second-brain-eval"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "ragas>=0.2.0,<0.5",  # ragas 0.4.x needs langchain 0.x ecosystem
     "psycopg[binary]>=3.1.0",
