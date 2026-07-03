@@ -90,6 +90,10 @@ async def test_ac5_pii_redacted_before_llm_sees_message():
         captured_prompts.append(prompt)
         return _mock_routing("neither")
 
+    mock_memory_agent_output = MagicMock()
+    mock_memory_agent_output.fact_updates = []
+    mock_memory_agent_output.correction_updates = []
+
     with (
         patch(
             "second_brain.graphs.query_graph.AsyncConnectionPool",
@@ -101,11 +105,13 @@ async def test_ac5_pii_redacted_before_llm_sees_message():
         ),
         patch("second_brain.nodes.orchestrator._structured_llm") as mock_orch_llm,
         patch("second_brain.nodes.synthesis._structured_llm") as mock_synth_llm,
+        patch("second_brain.nodes.memory_agent._llm") as mock_memory_agent_llm,
     ):
         mock_orch_llm.ainvoke = AsyncMock(side_effect=capturing_orch_ainvoke)
         mock_synth_llm.ainvoke = AsyncMock(
             return_value=_mock_synthesis("Here is your answer.")
         )
+        mock_memory_agent_llm.ainvoke = AsyncMock(return_value=mock_memory_agent_output)
 
         graph, _pool = await build_query_graph(
             "postgresql://fake:test@localhost:5432/test"
@@ -161,6 +167,10 @@ async def test_ac6_pii_redacted_in_final_answer():
         "john.doe@secretcorp.com for further assistance."
     )
 
+    mock_memory_agent_output = MagicMock()
+    mock_memory_agent_output.fact_updates = []
+    mock_memory_agent_output.correction_updates = []
+
     with (
         patch(
             "second_brain.graphs.query_graph.AsyncConnectionPool",
@@ -172,9 +182,11 @@ async def test_ac6_pii_redacted_in_final_answer():
         ),
         patch("second_brain.nodes.orchestrator._structured_llm") as mock_orch_llm,
         patch("second_brain.nodes.synthesis._structured_llm") as mock_synth_llm,
+        patch("second_brain.nodes.memory_agent._llm") as mock_memory_agent_llm,
     ):
         mock_orch_llm.ainvoke = AsyncMock(return_value=_mock_routing("neither"))
         mock_synth_llm.ainvoke = AsyncMock(return_value=_mock_synthesis(pii_answer))
+        mock_memory_agent_llm.ainvoke = AsyncMock(return_value=mock_memory_agent_output)
 
         graph, _pool = await build_query_graph(
             "postgresql://fake:test@localhost:5432/test"
