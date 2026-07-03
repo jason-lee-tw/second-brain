@@ -67,6 +67,13 @@ def _mock_synthesis(answer: str, confidence: float = 0.9) -> MagicMock:
     return synth
 
 
+def _mock_memory_agent_output() -> MagicMock:
+    output = MagicMock()
+    output.fact_updates = []
+    output.correction_updates = []
+    return output
+
+
 # ---------------------------------------------------------------------------
 # AC-5: PII is redacted inbound (LLM never sees raw PII in the message)
 # ---------------------------------------------------------------------------
@@ -90,10 +97,6 @@ async def test_ac5_pii_redacted_before_llm_sees_message():
         captured_prompts.append(prompt)
         return _mock_routing("neither")
 
-    mock_memory_agent_output = MagicMock()
-    mock_memory_agent_output.fact_updates = []
-    mock_memory_agent_output.correction_updates = []
-
     with (
         patch(
             "second_brain.graphs.query_graph.AsyncConnectionPool",
@@ -111,7 +114,9 @@ async def test_ac5_pii_redacted_before_llm_sees_message():
         mock_synth_llm.ainvoke = AsyncMock(
             return_value=_mock_synthesis("Here is your answer.")
         )
-        mock_memory_agent_llm.ainvoke = AsyncMock(return_value=mock_memory_agent_output)
+        mock_memory_agent_llm.ainvoke = AsyncMock(
+            return_value=_mock_memory_agent_output()
+        )
 
         graph, _pool = await build_query_graph(
             "postgresql://fake:test@localhost:5432/test"
@@ -167,10 +172,6 @@ async def test_ac6_pii_redacted_in_final_answer():
         "john.doe@secretcorp.com for further assistance."
     )
 
-    mock_memory_agent_output = MagicMock()
-    mock_memory_agent_output.fact_updates = []
-    mock_memory_agent_output.correction_updates = []
-
     with (
         patch(
             "second_brain.graphs.query_graph.AsyncConnectionPool",
@@ -186,7 +187,9 @@ async def test_ac6_pii_redacted_in_final_answer():
     ):
         mock_orch_llm.ainvoke = AsyncMock(return_value=_mock_routing("neither"))
         mock_synth_llm.ainvoke = AsyncMock(return_value=_mock_synthesis(pii_answer))
-        mock_memory_agent_llm.ainvoke = AsyncMock(return_value=mock_memory_agent_output)
+        mock_memory_agent_llm.ainvoke = AsyncMock(
+            return_value=_mock_memory_agent_output()
+        )
 
         graph, _pool = await build_query_graph(
             "postgresql://fake:test@localhost:5432/test"
@@ -261,10 +264,6 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
     async def _stub_memory_retrieval_node(_state: dict) -> dict:
         return {"retrieved_memory": []}
 
-    mock_memory_agent_output = MagicMock()
-    mock_memory_agent_output.fact_updates = []
-    mock_memory_agent_output.correction_updates = []
-
     with (
         patch(
             "second_brain.graphs.query_graph.AsyncConnectionPool",
@@ -326,7 +325,7 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
                 return_value=_mock_synthesis("Second Brain is here to help.")
             )
             mock_memory_agent_llm.ainvoke = AsyncMock(
-                return_value=mock_memory_agent_output
+                return_value=_mock_memory_agent_output()
             )
 
             async with AsyncClient(
