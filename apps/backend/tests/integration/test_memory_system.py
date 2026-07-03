@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy import create_engine, text
 
 _DATABASE_URL = os.environ.get("DATABASE_URL", "")
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 _TEST_SESSION_ID = "integration-memory-test"
 
@@ -74,7 +74,6 @@ def _make_state(**overrides):  # type: ignore[return]
     return base
 
 
-@pytest.mark.asyncio
 async def test_ac1_fact_written_to_db_with_embedding(db_engine):
     """AC-1: fact_updates → learned_facts row with 1024-dim non-zero embedding."""
     from second_brain.nodes.memory_persistence import memory_persistence_node
@@ -112,7 +111,6 @@ async def test_ac1_fact_written_to_db_with_embedding(db_engine):
         assert any(x != 0.0 for x in row.embedding)
 
 
-@pytest.mark.asyncio
 async def test_ac2_conflict_detected_not_written(db_engine):
     """AC-2: pre-seed a fact; add semantically similar fact.
 
@@ -167,7 +165,6 @@ async def test_ac2_conflict_detected_not_written(db_engine):
     assert count == 0
 
 
-@pytest.mark.asyncio
 async def test_ac4_correction_written_with_embedding(db_engine):
     """AC-4: correction_updates → model_corrections row with correction embedding."""
     from second_brain.nodes.memory_persistence import memory_persistence_node
@@ -201,7 +198,6 @@ async def test_ac4_correction_written_with_embedding(db_engine):
     assert len(rows[0].embedding) == 1024
 
 
-@pytest.mark.asyncio
 async def test_full_memory_loop_persist_then_retrieve(db_engine):  # noqa: ARG001
     """Full loop: persist fact → retrieve on related query → fact in memory."""
     from langchain_core.messages import HumanMessage

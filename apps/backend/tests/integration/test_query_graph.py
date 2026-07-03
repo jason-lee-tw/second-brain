@@ -73,6 +73,7 @@ def _mock_synthesis(answer: str, confidence: float = 0.9) -> MagicMock:
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio(loop_scope="session")
 async def test_ac5_pii_redacted_before_llm_sees_message():
     """AC-5: user message PII is redacted before the orchestrator LLM sees it.
 
@@ -143,6 +144,7 @@ async def test_ac5_pii_redacted_before_llm_sees_message():
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio(loop_scope="session")
 async def test_ac6_pii_redacted_in_final_answer():
     """AC-6: PII that the LLM injects into its answer is stripped before returning.
 
