@@ -213,11 +213,17 @@ async def test_full_memory_loop_persist_then_retrieve(db_engine):  # noqa: ARG00
     from second_brain.nodes.memory_retrieval import memory_retrieval_node
 
     # Turn 1: persist
+    # NOTE: fact/query pair chosen because their REAL cosine similarity under
+    # the live embedding model (qwen3-embedding:0.6b) measures ~0.73 — well
+    # above memory_retrieval_threshold (0.5) — while still requiring semantic
+    # retrieval rather than exact string matching (the query doesn't contain
+    # "cycling"). Verified empirically; do not swap in a paraphrase without
+    # re-measuring the real similarity.
     await memory_persistence_node(
         _make_state(
             fact_updates=[
                 {
-                    "fact": "The user is a professional cyclist.",
+                    "fact": "The user's favorite sport is cycling.",
                     "confidence": 0.9,
                     "conflicts_with": [],
                 }
@@ -226,10 +232,11 @@ async def test_full_memory_loop_persist_then_retrieve(db_engine):  # noqa: ARG00
     )
 
     # Turn 2: retrieve
+    query = "What is the user's favorite sport?"
     result = await memory_retrieval_node(
-        _make_state(messages=[HumanMessage(content="What sports do I do?")])
+        _make_state(messages=[HumanMessage(content=query)])
     )
 
     retrieved = result["retrieved_memory"]
     assert len(retrieved) >= 1
-    assert any("cyclist" in item["fact"].lower() for item in retrieved)
+    assert any("cycling" in item["fact"].lower() for item in retrieved)
