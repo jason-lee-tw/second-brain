@@ -118,15 +118,17 @@ def test_document_chunks_fk_to_ingested_documents(db_engine):
     assert "ingested_documents" in referred
 
 
-def test_learned_facts_fk_to_chat_history(db_engine):
+def test_learned_facts_no_fk_to_chat_history(db_engine):
+    """Migration 002 dropped this FK — chat_history is never written by the app."""
     inspector = inspect(db_engine)
     fks = inspector.get_foreign_keys("learned_facts")
     referred = {fk["referred_table"] for fk in fks}
-    assert "chat_history" in referred
+    assert "chat_history" not in referred
 
 
-def test_model_corrections_fk_to_chat_history(db_engine):
+def test_model_corrections_no_fk_to_chat_history(db_engine):
+    """Migration 002 dropped this FK — chat_history is never written by the app."""
     inspector = inspect(db_engine)
     fks = inspector.get_foreign_keys("model_corrections")
     referred = {fk["referred_table"] for fk in fks}
-    assert "chat_history" in referred
+    assert "chat_history" not in referred

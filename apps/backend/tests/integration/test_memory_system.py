@@ -12,10 +12,11 @@ import os
 import uuid
 
 import pytest
-from sqlalchemy import create_engine, text
+from pgvector.psycopg2 import register_vector
+from sqlalchemy import create_engine, event, text
 
 _DATABASE_URL = os.environ.get("DATABASE_URL", "")
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 _TEST_SESSION_ID = "integration-memory-test"
 
@@ -32,6 +33,12 @@ def db_engine():
     # Strip asyncpg driver suffix — sync SQLAlchemy doesn't support it
     sync_url = url.replace("+asyncpg", "")
     engine = create_engine(sync_url)
+    # Raw text() queries need the vector codec registered explicitly —
+    # SQLModel's ORM path gets it for free from pgvector.sqlalchemy.Vector,
+    # but this fixture reads back rows outside the ORM.
+    event.listens_for(engine, "connect")(
+        lambda dbapi_conn, _: register_vector(dbapi_conn)
+    )
     yield engine
     engine.dispose()
 
@@ -74,7 +81,6 @@ def _make_state(**overrides):  # type: ignore[return]
     return base
 
 
-@pytest.mark.asyncio
 async def test_ac1_fact_written_to_db_with_embedding(db_engine):
     """AC-1: fact_updates → learned_facts row with 1024-dim non-zero embedding."""
     from second_brain.nodes.memory_persistence import memory_persistence_node
@@ -112,7 +118,6 @@ async def test_ac1_fact_written_to_db_with_embedding(db_engine):
         assert any(x != 0.0 for x in row.embedding)
 
 
-@pytest.mark.asyncio
 async def test_ac2_conflict_detected_not_written(db_engine):
     """AC-2: pre-seed a fact; add semantically similar fact.
 
@@ -167,7 +172,6 @@ async def test_ac2_conflict_detected_not_written(db_engine):
     assert count == 0
 
 
-@pytest.mark.asyncio
 async def test_ac4_correction_written_with_embedding(db_engine):
     """AC-4: correction_updates → model_corrections row with correction embedding."""
     from second_brain.nodes.memory_persistence import memory_persistence_node
@@ -201,7 +205,6 @@ async def test_ac4_correction_written_with_embedding(db_engine):
     assert len(rows[0].embedding) == 1024
 
 
-@pytest.mark.asyncio
 async def test_full_memory_loop_persist_then_retrieve(db_engine):  # noqa: ARG001
     """Full loop: persist fact → retrieve on related query → fact in memory."""
     from langchain_core.messages import HumanMessage
@@ -210,11 +213,17 @@ async def test_full_memory_loop_persist_then_retrieve(db_engine):  # noqa: ARG00
     from second_brain.nodes.memory_retrieval import memory_retrieval_node
 
     # Turn 1: persist
+    # NOTE: fact/query pair chosen because their REAL cosine similarity under
+    # the live embedding model (qwen3-embedding:0.6b) measures ~0.73 — well
+    # above memory_retrieval_threshold (0.5) — while still requiring semantic
+    # retrieval rather than exact string matching (the query doesn't contain
+    # "cycling"). Verified empirically; do not swap in a paraphrase without
+    # re-measuring the real similarity.
     await memory_persistence_node(
         _make_state(
             fact_updates=[
                 {
-                    "fact": "The user is a professional cyclist.",
+                    "fact": "The user's favorite sport is cycling.",
                     "confidence": 0.9,
                     "conflicts_with": [],
                 }
@@ -223,10 +232,11 @@ async def test_full_memory_loop_persist_then_retrieve(db_engine):  # noqa: ARG00
     )
 
     # Turn 2: retrieve
+    query = "What is the user's favorite sport?"
     result = await memory_retrieval_node(
-        _make_state(messages=[HumanMessage(content="What sports do I do?")])
+        _make_state(messages=[HumanMessage(content=query)])
     )
 
     retrieved = result["retrieved_memory"]
     assert len(retrieved) >= 1
-    assert any("cyclist" in item["fact"].lower() for item in retrieved)
+    assert any("cycling" in item["fact"].lower() for item in retrieved)
