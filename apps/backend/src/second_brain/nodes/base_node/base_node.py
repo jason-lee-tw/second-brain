@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable
 
 type ResponseStateType = object
 
@@ -8,4 +9,6 @@ class BaseNode[InputStateType, ResultStateType](ABC):
     super().__init__()
 
   @abstractmethod
-  def __call__(self, state: InputStateType) -> ResultStateType: ...
+  def __call__(
+    self, state: InputStateType
+  ) -> Awaitable[ResultStateType] | ResultStateType: ...
