@@ -4,8 +4,8 @@ import os
 # pydantic-settings reads env vars at Settings() instantiation time (module level).
 # pytest processes conftest.py before importing test files, so these are set first.
 os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql+psycopg2://second_brain:secret@localhost:5432/second_brain",
+  "DATABASE_URL",
+  "postgresql+psycopg2://second_brain:secret@localhost:5432/second_brain",
 )
 os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-api-key")

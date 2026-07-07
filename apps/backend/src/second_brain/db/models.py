@@ -19,92 +19,92 @@ from second_brain.services.chunking import ChunkMetadata
 
 
 class ChatHistory(SQLModel, table=True):
-    """LangGraph session state — UUID7 string is also the LangGraph thread_id."""
+  """LangGraph session state — UUID7 string is also the LangGraph thread_id."""
 
-    __tablename__: ClassVar[str] = "chat_history"  # pyright: ignore[reportIncompatibleVariableOverride]
+  __tablename__: ClassVar[str] = "chat_history"  # pyright: ignore[reportIncompatibleVariableOverride]
 
-    session_id: str = Field(primary_key=True)
-    thread_data: dict[str, object] = Field(
-        default_factory=dict, sa_column=Column(JSONB, nullable=False)
-    )
-    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime | None = Field(
-        default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(
-            DateTime(timezone=True),
-            default=func.now(),
-            onupdate=func.now(),
-            nullable=True,
-        ),
-    )
+  session_id: str = Field(primary_key=True)
+  thread_data: dict[str, object] = Field(
+    default_factory=dict, sa_column=Column(JSONB, nullable=False)
+  )
+  created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
+  updated_at: datetime | None = Field(
+    default_factory=lambda: datetime.now(UTC),
+    sa_column=Column(
+      DateTime(timezone=True),
+      default=func.now(),
+      onupdate=func.now(),
+      nullable=True,
+    ),
+  )
 
 
 class IngestedDocument(SQLModel, table=True):
-    """Deduplication record for ingested files and URLs."""
+  """Deduplication record for ingested files and URLs."""
 
-    __tablename__: ClassVar[str] = "ingested_documents"  # pyright: ignore[reportIncompatibleVariableOverride]
+  __tablename__: ClassVar[str] = "ingested_documents"  # pyright: ignore[reportIncompatibleVariableOverride]
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    filename: str
-    source_url: str | None = Field(default=None)
-    content_hash: str = Field(
-        unique=True
-    )  # MD5 of raw file content; used to skip re-ingestion
-    status: str  # 'processed' | 'failed'
-    ingested_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
+  id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+  filename: str
+  source_url: str | None = Field(default=None)
+  content_hash: str = Field(
+    unique=True
+  )  # MD5 of raw file content; used to skip re-ingestion
+  status: str  # 'processed' | 'failed'
+  ingested_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DocumentChunk(SQLModel, table=True):
-    """A single chunk from an ingested document, with embedding for RAG retrieval."""
+  """A single chunk from an ingested document, with embedding for RAG retrieval."""
 
-    __tablename__: ClassVar[str] = "document_chunks"  # pyright: ignore[reportIncompatibleVariableOverride]
+  __tablename__: ClassVar[str] = "document_chunks"  # pyright: ignore[reportIncompatibleVariableOverride]
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    doc_id: uuid.UUID = Field(foreign_key="ingested_documents.id")
-    content: str  # chunk text with LLM-generated contextual header prepended
-    embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
-    chunk_index: int
-    # Python attr `chunk_metadata` maps to SQL column `metadata`.
-    # Do NOT rename the column — the SQL schema uses `metadata`.
-    # Do NOT use `metadata` as the Python attr — it conflicts with SQLAlchemy internals.
-    chunk_metadata: ChunkMetadata | None = Field(
-        default=None, sa_column=Column("metadata", JSONB, nullable=True)
-    )
-    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
+  id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+  doc_id: uuid.UUID = Field(foreign_key="ingested_documents.id")
+  content: str  # chunk text with LLM-generated contextual header prepended
+  embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
+  chunk_index: int
+  # Python attr `chunk_metadata` maps to SQL column `metadata`.
+  # Do NOT rename the column — the SQL schema uses `metadata`.
+  # Do NOT use `metadata` as the Python attr — it conflicts with SQLAlchemy internals.
+  chunk_metadata: ChunkMetadata | None = Field(
+    default=None, sa_column=Column("metadata", JSONB, nullable=True)
+  )
+  created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class LearnedFact(SQLModel, table=True):
-    """A user fact extracted from conversation and stored for semantic retrieval."""
+  """A user fact extracted from conversation and stored for semantic retrieval."""
 
-    __tablename__: ClassVar[str] = "learned_facts"  # pyright: ignore[reportIncompatibleVariableOverride]
+  __tablename__: ClassVar[str] = "learned_facts"  # pyright: ignore[reportIncompatibleVariableOverride]
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    fact: str  # PII-scrubbed fact text
-    embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
-    source_session: str  # audit metadata — no FK enforced
-    confidence: float
-    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime | None = Field(
-        default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(
-            DateTime(timezone=True),
-            default=func.now(),
-            onupdate=func.now(),
-            nullable=True,
-        ),
-    )
+  id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+  fact: str  # PII-scrubbed fact text
+  embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
+  source_session: str  # audit metadata — no FK enforced
+  confidence: float
+  created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
+  updated_at: datetime | None = Field(
+    default_factory=lambda: datetime.now(UTC),
+    sa_column=Column(
+      DateTime(timezone=True),
+      default=func.now(),
+      onupdate=func.now(),
+      nullable=True,
+    ),
+  )
 
 
 class ModelCorrection(SQLModel, table=True):
-    """A user correction to a model answer; embedding encodes the `correction` field."""
+  """A user correction to a model answer; embedding encodes the `correction` field."""
 
-    __tablename__: ClassVar[str] = "model_corrections"  # pyright: ignore[reportIncompatibleVariableOverride]
+  __tablename__: ClassVar[str] = "model_corrections"  # pyright: ignore[reportIncompatibleVariableOverride]
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    original_answer: str
-    correction: str
-    root_cause: str
-    # Embedding encodes `correction` (not `original_answer`) per architecture decision.
-    embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
-    source_session: str  # audit metadata — no FK enforced
-    created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
+  id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+  original_answer: str
+  correction: str
+  root_cause: str
+  # Embedding encodes `correction` (not `original_answer`) per architecture decision.
+  embedding: list[float] = Field(sa_column=Column(Vector(1024), nullable=True))
+  source_session: str  # audit metadata — no FK enforced
+  created_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))

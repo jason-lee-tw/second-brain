@@ -14,100 +14,99 @@ _NEITHER_CONFIDENCE_FLOOR = 0.5
 
 
 class _SynthesisOutput(BaseModel):
-    final_answer: str
-    confidence: float = Field(ge=0.0, le=1.0)
-    reasoning: str
+  final_answer: str
+  confidence: float = Field(ge=0.0, le=1.0)
+  reasoning: str
 
 
 _structured_llm = ChatAnthropic(model="claude-sonnet-4-6").with_structured_output(  # pyright: ignore[reportCallIssue]  # langchain-anthropic stubs don't expose model= as __init__ kwarg
-    _SynthesisOutput
+  _SynthesisOutput
 )
 
 
 def _format_messages(messages: list[BaseMessage]) -> str:
-    """Format a list of HumanMessage/AIMessage to a readable string.
+  """Format a list of HumanMessage/AIMessage to a readable string.
 
-    Messages are expected to have string content; raises on multi-modal content.
-    """
-    parts: list[str] = []
-    for msg in messages:
-        if isinstance(msg, HumanMessage):
-            parts.append(f"User: {get_str_content(msg)}")
-        elif isinstance(msg, AIMessage):
-            parts.append(f"Assistant: {get_str_content(msg)}")
-        else:
-            parts.append(f"[{type(msg).__name__}]: {get_str_content(msg)}")
-    return "\n".join(parts)
+  Messages are expected to have string content; raises on multi-modal content.
+  """
+  parts: list[str] = []
+  for msg in messages:
+    if isinstance(msg, HumanMessage):
+      parts.append(f"User: {get_str_content(msg)}")
+    elif isinstance(msg, AIMessage):
+      parts.append(f"Assistant: {get_str_content(msg)}")
+    else:
+      parts.append(f"[{type(msg).__name__}]: {get_str_content(msg)}")
+  return "\n".join(parts)
 
 
 async def synthesize_answer(state: SecondBrainState) -> SynthesisNodeOutput:
-    """LangGraph node: synthesize a final answer with confidence scoring."""
-    query = get_str_content(state["messages"][-1])
-    routing = state.get("routing_decision", "neither")
+  """LangGraph node: synthesize a final answer with confidence scoring."""
+  query = get_str_content(state["messages"][-1])
+  routing = state.get("routing_decision", "neither")
 
-    # Build context sections
-    chunks: list[str] = []
-    rag_context = ""
-    if state.get("rag_results"):
-        chunks = [r["content"] for r in state["rag_results"]]
-        rag_context = "### RAG Context\n" + "\n---\n".join(chunks)
+  # Build context sections
+  chunks: list[str] = []
+  rag_context = ""
+  if state.get("rag_results"):
+    chunks = [r["content"] for r in state["rag_results"]]
+    rag_context = "### RAG Context\n" + "\n---\n".join(chunks)
 
-    items: list[str] = []
-    web_context = ""
-    if state.get("web_results"):
-        items = [
-            f"**{r['title']}** ({r['url']})\n{r['content']}"
-            for r in state["web_results"]
-        ]
-        web_context = "### Web Research\n" + "\n---\n".join(items)
+  items: list[str] = []
+  web_context = ""
+  if state.get("web_results"):
+    items = [
+      f"**{r['title']}** ({r['url']})\n{r['content']}" for r in state["web_results"]
+    ]
+    web_context = "### Web Research\n" + "\n---\n".join(items)
 
-    facts: list[str] = []
-    memory_context = ""
-    if state.get("retrieved_memory"):
-        facts = [
-            f"- {m['fact']} (confidence: {m['confidence']:.2f})"
-            for m in state["retrieved_memory"]
-        ]
-        memory_context = "### Memory\n" + "\n".join(facts)
+  facts: list[str] = []
+  memory_context = ""
+  if state.get("retrieved_memory"):
+    facts = [
+      f"- {m['fact']} (confidence: {m['confidence']:.2f})"
+      for m in state["retrieved_memory"]
+    ]
+    memory_context = "### Memory\n" + "\n".join(facts)
 
-    context_used = chunks + items + facts
+  context_used = chunks + items + facts
 
-    # Use only the last 10 messages (excluding the current query) for history
-    conversation_history = _format_messages(state["messages"][-11:-1])
+  # Use only the last 10 messages (excluding the current query) for history
+  conversation_history = _format_messages(state["messages"][-11:-1])
 
-    context_parts = [p for p in [rag_context, web_context, memory_context] if p]
-    no_context = "No additional context available."
-    context_section = "\n\n".join(context_parts) if context_parts else no_context
+  context_parts = [p for p in [rag_context, web_context, memory_context] if p]
+  no_context = "No additional context available."
+  context_section = "\n\n".join(context_parts) if context_parts else no_context
 
-    prior_conv = (
-        conversation_history if conversation_history else "No prior conversation."
-    )
-    prompt = (
-        "You are a knowledgeable Second Brain assistant. "
-        "Synthesize a clear, accurate answer.\n\n"
-        f"## Current Query\n{query}\n\n"
-        f"## Available Context\n{context_section}\n\n"
-        f"## Conversation History\n{prior_conv}\n\n"
-        "## Instructions\n"
-        "- Provide a direct, helpful answer to the query.\n"
-        "- Rate your confidence (0.0-1.0) based on available evidence.\n"
-        "- Explain your reasoning briefly.\n"
-        "- If context is limited, say so honestly and keep confidence lower.\n"
-    )
+  prior_conv = (
+    conversation_history if conversation_history else "No prior conversation."
+  )
+  prompt = (
+    "You are a knowledgeable Second Brain assistant. "
+    "Synthesize a clear, accurate answer.\n\n"
+    f"## Current Query\n{query}\n\n"
+    f"## Available Context\n{context_section}\n\n"
+    f"## Conversation History\n{prior_conv}\n\n"
+    "## Instructions\n"
+    "- Provide a direct, helpful answer to the query.\n"
+    "- Rate your confidence (0.0-1.0) based on available evidence.\n"
+    "- Explain your reasoning briefly.\n"
+    "- If context is limited, say so honestly and keep confidence lower.\n"
+  )
 
-    output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
+  output: _SynthesisOutput = await _structured_llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
 
-    confidence = output.confidence
-    # Floor confidence for conversational queries: skipping external retrieval
-    # means no uncertain sources were consulted
-    if routing == "neither":
-        confidence = max(confidence, _NEITHER_CONFIDENCE_FLOOR)
+  confidence = output.confidence
+  # Floor confidence for conversational queries: skipping external retrieval
+  # means no uncertain sources were consulted
+  if routing == "neither":
+    confidence = max(confidence, _NEITHER_CONFIDENCE_FLOOR)
 
-    is_uncertain = confidence < _UNCERTAINTY_THRESHOLD
-    return {
-        "final_answer": output.final_answer,
-        "confidence": confidence,
-        "is_uncertain": is_uncertain,
-        "context_used": context_used,
-        # ponytail: awaiting_correction is set by memory_persistence_node, not here
-    }
+  is_uncertain = confidence < _UNCERTAINTY_THRESHOLD
+  return {
+    "final_answer": output.final_answer,
+    "confidence": confidence,
+    "is_uncertain": is_uncertain,
+    "context_used": context_used,
+    # ponytail: awaiting_correction is set by memory_persistence_node, not here
+  }
