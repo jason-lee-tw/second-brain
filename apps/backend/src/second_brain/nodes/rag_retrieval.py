@@ -1,10 +1,13 @@
 """RAG retrieval node: embeds the user query and fetches top-k chunks via pgvector."""
 
+from typing import override
+
 import httpx
 
 from second_brain.config import settings
 from second_brain.db.pool import get_pgvector_pool
 from second_brain.graphs.state import RagResult, RagRetrievalOutput, SecondBrainState
+from second_brain.nodes.base_node import BaseNode
 from second_brain.services.chunking import ChunkMetadata
 from second_brain.utils import get_str_content
 
@@ -59,9 +62,15 @@ async def _query_pgvector(embedding: list[float], top_k: int = 5) -> list[RagRes
     ]
 
 
-async def retrieve_from_rag(state: SecondBrainState) -> RagRetrievalOutput:
-  """LangGraph node: retrieves relevant chunks for the latest user message."""
-  query = get_str_content(state["messages"][-1])
-  embedding = await _embed_query(query, settings.ollama_base_url)
-  rows = await _query_pgvector(embedding)
-  return {"rag_results": rows}
+class RagRetrievalNode(BaseNode[SecondBrainState, RagRetrievalOutput]):
+  """Retrieves relevant chunks for the latest user message."""
+
+  @override
+  async def __call__(self, state: SecondBrainState) -> RagRetrievalOutput:
+    query = get_str_content(state["messages"][-1])
+    embedding = await _embed_query(query, settings.ollama_base_url)
+    rows = await _query_pgvector(embedding)
+    return {"rag_results": rows}
+
+
+retrieve_from_rag = RagRetrievalNode()
