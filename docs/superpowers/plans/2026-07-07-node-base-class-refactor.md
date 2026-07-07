@@ -18,29 +18,33 @@
   1. `orchestrator`/`memory_agent`/`synthesis` move from an unset (`None`, ~1.0) temperature to `ClaudeAgent`'s default `temperature=0.7`.
   2. `ingestion_agent`'s header generation moves from the raw `anthropic.AsyncAnthropic` SDK client to `ClaudeAgent`/`ChatAnthropic`.
   3. `settings.ingestion_model` and `ingestion_agent.shutdown()` (plus its two call sites in `main.py`) are deleted.
+  4. `orchestrator`/`memory_agent`/`ingestion_agent` move from the undated alias `"claude-haiku-4-5"` to the dated snapshot `CLAUDE_MODEL_NAME.HAIKU = "claude-haiku-4-5-20251001"` — accepted for reproducibility (a rolling alias can silently change model behavior underneath you without a code change).
 - **Per-task verification cycle:** for tasks that are pure structural moves already covered by an existing passing test file, the cycle is *convert source → update test patch targets to match the new structure → run the test file → confirm PASS*, not a contrived red-green — the correctness spec already lives in the existing test. Where behavior genuinely changes (Task 11's header generation), a real failing-test-first cycle is used for that specific piece.
 - Naming rule: every module's current public symbol (the name graphs/tests import) is rebound from a function to a singleton instance — the name itself never changes.
 - Method rule: only helpers touching `self._agent`/a cached model become instance methods; everything else stays a module-level private function.
 
 ---
 
-### Task 1: Fix `BaseAgentNode` annotation bug + export `CLAUDE_MODEL_NAME`
+### Task 1: Fix `BaseAgentNode` annotation bug, fix `__call__` return-type contract, export `CLAUDE_MODEL_NAME`
 
 **Files:**
 - Modify: `apps/backend/src/second_brain/nodes/base_node/base_agent_node.py`
+- Modify: `apps/backend/src/second_brain/nodes/base_node/base_node.py`
 - Modify: `apps/backend/src/second_brain/nodes/base_node/agents/__init__.py`
 
 **Interfaces:**
 - Produces: `second_brain.nodes.base_node.agents.CLAUDE_MODEL_NAME` importable alongside `ClaudeAgent`/`BaseAgent` — every later task (8–11) imports it this way: `from second_brain.nodes.base_node.agents import CLAUDE_MODEL_NAME, ClaudeAgent`.
+- Produces: both `BaseNode.__call__` and `BaseAgentNode.__call__` typed to return `Awaitable[ResultStateType] | ResultStateType` — every concrete subclass in Tasks 2–11 (sync or async) satisfies this signature and must add `@override`.
 
-This is a type-annotation fix and an export addition — no new runtime behavior, so there's no new test to write. Verification is running the existing full suite to confirm nothing regresses.
+This task also fixes a return-type contract bug, verified live against this repo's basedpyright config: the abstract `__call__` on both base classes is declared sync-only, so every planned `async def __call__` override (8 of 11 subclasses across Tasks 3–6, 8–11) fails `just type-check` with a hard `reportIncompatibleMethodOverride` error, and every override without `@override` (all 11) fails it with `reportImplicitOverride` — a warning, but `just type-check`'s exit code still fails on it. Fixing the return type to a union and adding `@override` everywhere keeps the real override-safety check active instead of suppressing it project-wide. There's no new business-logic behavior, so there's no new test to write beyond the existing full suite.
 
-- [ ] **Step 1: Fix the `_agent` annotation**
+- [ ] **Step 1: Fix the `_agent` annotation and `__call__` return type on `BaseAgentNode`**
 
 Replace the full contents of `apps/backend/src/second_brain/nodes/base_node/base_agent_node.py`:
 
 ```python
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable
 
 from .agents import BaseAgent
 
@@ -53,10 +57,33 @@ class BaseAgentNode[InputStateType, ResultStateType](ABC):
     self._agent = agent
 
   @abstractmethod
-  def __call__(self, state: InputStateType) -> ResultStateType: ...
+  def __call__(
+    self, state: InputStateType
+  ) -> Awaitable[ResultStateType] | ResultStateType: ...
 ```
 
-- [ ] **Step 2: Export `CLAUDE_MODEL_NAME`**
+- [ ] **Step 2: Fix the `__call__` return type on `BaseNode`**
+
+Replace the full contents of `apps/backend/src/second_brain/nodes/base_node/base_node.py`:
+
+```python
+from abc import ABC, abstractmethod
+from collections.abc import Awaitable
+
+type ResponseStateType = object
+
+
+class BaseNode[InputStateType, ResultStateType](ABC):
+  def __init__(self):
+    super().__init__()
+
+  @abstractmethod
+  def __call__(
+    self, state: InputStateType
+  ) -> Awaitable[ResultStateType] | ResultStateType: ...
+```
+
+- [ ] **Step 3: Export `CLAUDE_MODEL_NAME`**
 
 Replace the full contents of `apps/backend/src/second_brain/nodes/base_node/agents/__init__.py`:
 
@@ -67,16 +94,16 @@ from .claude_agent import CLAUDE_MODEL_NAME, ClaudeAgent
 __all__ = ["BaseAgent", "CLAUDE_MODEL_NAME", "ClaudeAgent"]
 ```
 
-- [ ] **Step 3: Run verification**
+- [ ] **Step 4: Run verification**
 
 Run: `just lint && just type-check && just test-unit`
-Expected: all four pass with no errors (identical output to before this change — nothing imports `CLAUDE_MODEL_NAME` from the package root yet, and `_agent`'s annotation-only change is invisible at runtime).
+Expected: all pass with no errors (there are no existing `BaseNode`/`BaseAgentNode` subclasses in the codebase yet, so the return-type widening and `_agent` annotation change are both invisible at runtime and at every current call site).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add apps/backend/src/second_brain/nodes/base_node/base_agent_node.py apps/backend/src/second_brain/nodes/base_node/agents/__init__.py
-git commit -m "fix: annotate BaseAgentNode._agent instead of assigning the class, export CLAUDE_MODEL_NAME"
+git add apps/backend/src/second_brain/nodes/base_node/base_agent_node.py apps/backend/src/second_brain/nodes/base_node/base_node.py apps/backend/src/second_brain/nodes/base_node/agents/__init__.py
+git commit -m "fix: correct BaseNode/BaseAgentNode __call__ contract (annotation + async-compatible return type), export CLAUDE_MODEL_NAME"
 ```
 
 ---
@@ -98,6 +125,8 @@ Replace the full contents of `apps/backend/src/second_brain/nodes/pii_redaction.
 ```python
 """PII redaction graph nodes for inbound queries and outbound answers."""
 
+from typing import override
+
 from langchain_core.messages import HumanMessage
 
 from second_brain.graphs.state import (
@@ -113,6 +142,7 @@ from second_brain.utils import get_str_content
 class RedactInboundNode(BaseNode[SecondBrainState, RedactInboundOutput]):
   """Redact PII from the last message before it enters the graph."""
 
+  @override
   def __call__(self, state: SecondBrainState) -> RedactInboundOutput:
     """Returns only the redacted message; the ``add_messages`` reducer replaces
     the existing message by id, preserving all prior messages.
@@ -127,6 +157,7 @@ class RedactInboundNode(BaseNode[SecondBrainState, RedactInboundOutput]):
 class RedactOutboundNode(BaseNode[SecondBrainState, RedactOutboundOutput]):
   """Redact PII from the final answer before it leaves the graph."""
 
+  @override
   def __call__(self, state: SecondBrainState) -> RedactOutboundOutput:
     return {"final_answer": redact_pii(state["final_answer"])}
 
@@ -171,6 +202,7 @@ Replace the full contents of `apps/backend/src/second_brain/nodes/web_research.p
 """Web Research node: queries Tavily search API."""
 
 import asyncio
+from typing import override
 
 from tavily import TavilyClient
 
@@ -183,6 +215,7 @@ from second_brain.utils import get_str_content
 class WebResearchNode(BaseNode[SecondBrainState, WebResearchOutput]):
   """Search the web using Tavily and return up to 3 results."""
 
+  @override
   async def __call__(self, state: SecondBrainState) -> WebResearchOutput:
     query = get_str_content(state["messages"][-1])
     client = TavilyClient(api_key=settings.tavily_api_key.get_secret_value())
@@ -235,6 +268,8 @@ Replace the full contents of `apps/backend/src/second_brain/nodes/rag_retrieval.
 
 ```python
 """RAG retrieval node: embeds the user query and fetches top-k chunks via pgvector."""
+
+from typing import override
 
 import httpx
 
@@ -299,6 +334,7 @@ async def _query_pgvector(embedding: list[float], top_k: int = 5) -> list[RagRes
 class RagRetrievalNode(BaseNode[SecondBrainState, RagRetrievalOutput]):
   """Retrieves relevant chunks for the latest user message."""
 
+  @override
   async def __call__(self, state: SecondBrainState) -> RagRetrievalOutput:
     query = get_str_content(state["messages"][-1])
     embedding = await _embed_query(query, settings.ollama_base_url)
@@ -348,6 +384,7 @@ Searches learned_facts + model_corrections tables.
 """
 
 import asyncio
+from typing import override
 
 import asyncpg
 
@@ -419,6 +456,7 @@ class MemoryRetrievalNode(BaseNode[SecondBrainState, RetrieveMemoryOutput]):
   Fails hard on Ollama unavailability — no empty-list fallback.
   """
 
+  @override
   async def __call__(self, state: SecondBrainState) -> RetrieveMemoryOutput:
     last_human = last_human_message(state["messages"])
     if last_human is None:
@@ -487,7 +525,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from typing import Any
+from typing import Any, override
 
 from sqlmodel import Session
 
@@ -618,6 +656,7 @@ async def _persist_fact(
 class MemoryPersistenceNode(BaseNode[SecondBrainState, dict[str, Any]]):
   """Tool-call node: embeds and persists fact_updates + correction_updates."""
 
+  @override
   async def __call__(self, state: SecondBrainState) -> dict[str, Any]:
     fact_updates: list[FactUpdate] = state.get("fact_updates") or []
     correction_updates: list[CorrectionUpdate] = state.get("correction_updates") or []
@@ -711,6 +750,8 @@ No test file directly imports `pick_file_node` (confirmed by repo search) — it
 ```python
 """PickFileNode: moves the next pending or retry file into in_progress."""
 
+from typing import override
+
 from second_brain.graphs.state import IngestionState, PickFileOutput
 from second_brain.nodes.base_node import BaseNode
 
@@ -723,6 +764,7 @@ class PickFileNode(BaseNode[IngestionState, PickFileOutput]):
   after the attempt to preserve retry metadata for retry_count tracking.
   """
 
+  @override
   def __call__(self, state: IngestionState) -> PickFileOutput:
     if state["files"]:
       return {
@@ -813,7 +855,7 @@ Replace the full contents of `apps/backend/src/second_brain/nodes/orchestrator.p
 
 ```python
 # apps/backend/src/second_brain/nodes/orchestrator.py
-from typing import Literal
+from typing import Literal, override
 
 from pydantic import BaseModel
 
@@ -855,6 +897,7 @@ class OrchestratorNode(BaseAgentNode[SecondBrainState, RouteQueryOutput]):
       _RoutingOutput
     )
 
+  @override
   async def __call__(self, state: SecondBrainState) -> RouteQueryOutput:
     """Reads messages[-1].content and retrieved_memory, outputs routing_decision."""
     query = get_str_content(state["messages"][-1])
@@ -928,6 +971,8 @@ Replace the full contents of `apps/backend/src/second_brain/nodes/memory_agent.p
 
 from __future__ import annotations
 
+from typing import override
+
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from second_brain.graphs.state import (
@@ -961,6 +1006,7 @@ class MemoryAgentNode(BaseAgentNode[SecondBrainState, dict[str, object]]):
     super().__init__(ClaudeAgent(CLAUDE_MODEL_NAME.HAIKU))
     self._llm = self._agent.get_model().with_structured_output(MemoryAgentOutput)
 
+  @override
   async def __call__(self, state: SecondBrainState) -> dict[str, object]:
     messages = state["messages"]
     awaiting_correction: bool = state.get("awaiting_correction", False)  # type: ignore[union-attr]
@@ -1110,6 +1156,8 @@ Replace the full contents of `apps/backend/src/second_brain/nodes/synthesis.py`:
 ```python
 """Synthesis node: generates a final answer with confidence scoring."""
 
+from typing import override
+
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
 
@@ -1155,6 +1203,7 @@ class SynthesisNode(BaseAgentNode[SecondBrainState, SynthesisNodeOutput]):
       _SynthesisOutput
     )
 
+  @override
   async def __call__(self, state: SecondBrainState) -> SynthesisNodeOutput:
     query = get_str_content(state["messages"][-1])
     routing = state.get("routing_decision", "neither")
@@ -1344,6 +1393,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import override
 
 from sqlmodel import Session, select
 
@@ -1473,6 +1523,7 @@ class IngestionAgentNode(BaseAgentNode[IngestionState, IngestionAgentOutput]):
 
     filepath.rename(PROCESSED_DIR / filename)
 
+  @override
   async def __call__(self, state: IngestionState) -> IngestionAgentOutput:
     """LangGraph node: process in_progress, update state on success or failure."""
     if state["in_progress"] is None:

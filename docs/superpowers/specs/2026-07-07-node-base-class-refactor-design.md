@@ -26,6 +26,21 @@ extend one of the two base classes, per two constraints from the requester:
    `__model: BaseChatModel` style. Zero-risk, the line is currently dead
    (immediately overwritten in `__init__`).
 
+1b. **Fix `BaseNode.__call__`/`BaseAgentNode.__call__` return type.** Both
+    abstract methods currently declare a sync-only return type
+    (`ResultStateType`), but 8 of the 11 planned node subclasses override
+    with `async def __call__`. Verified live: this fails `just type-check`
+    with a hard `reportIncompatibleMethodOverride` error on every async
+    subclass, and a `reportImplicitOverride` warning (which still fails the
+    `just` recipe's exit code) on every subclass, sync or async, since none
+    of them declare `@override`. Fix: change both abstract `__call__`
+    return types to `Awaitable[ResultStateType] | ResultStateType` (import
+    `from collections.abc import Awaitable`), and add `@override` (`from
+    typing import override`) to every concrete `__call__` override across
+    Tasks 2–11. This is a scope addition to decision 1, not a new
+    architectural direction — it keeps the real override-safety check
+    active instead of suppressing it project-wide.
+
 2. **Consolidate onto `ClaudeAgent`.** `orchestrator.py`, `memory_agent.py`,
    and `synthesis.py` currently instantiate `ChatAnthropic(model=...)`
    directly, bypassing `ClaudeAgent` entirely. `synthesis.py` uses the stale
@@ -67,7 +82,14 @@ extend one of the two base classes, per two constraints from the requester:
 7. **`settings.ingestion_model` (config.py:22) is deleted.** It's the only
    caller of that config field (confirmed via repo-wide grep — no test or
    other code overrides it), and it becomes dead once `IngestionAgentNode`
-   hardcodes `CLAUDE_MODEL_NAME.HAIKU` (same default value, "claude-haiku-4-5").
+   hardcodes `CLAUDE_MODEL_NAME.HAIKU`. This is NOT a same-value swap:
+   `CLAUDE_MODEL_NAME.HAIKU = "claude-haiku-4-5-20251001"` (a dated
+   snapshot) replaces the undated alias `"claude-haiku-4-5"` currently used
+   by `ingestion_model`, `orchestrator.py`, and `memory_agent.py` alike.
+   Accepted as a 4th explicit exception (see Global Constraints in the
+   plan): all three nodes move from a rolling alias to a pinned dated
+   snapshot — approved for reproducibility (a rolling alias can silently
+   change model behavior underneath you without a code change).
 
 8. **`ingestion_agent.py`'s `shutdown()` is deleted**, along with its two call
    sites in `main.py` (the import at line 12, the `await
@@ -160,11 +182,16 @@ The other 6 (`pii_redaction`, `web_research`, `rag_retrieval`,
 module-level helper functions unrelated to node structure — zero changes
 needed.
 
+A separate integration test file, `tests/integration/test_ingestion_graph.py`,
+also patches `_generate_contextual_header` (3 sites) and needs the same
+one-attribute-hop edit as `test_ingestion_agent.py` — see plan Task 11 Step 7.
+
 ## Out of scope
 
 - Conditional-edge routing functions (`_route_retrieval`, `_route_after_ingest`)
   — not `add_node`-registered nodes.
 - Any change to `BaseNode`/`BaseAgentNode`'s public shape beyond the
-  `_agent` annotation fix in decision 1.
+  `_agent` annotation fix (decision 1) and the `__call__` return-type fix
+  (decision 1b).
 - Any change to state schemas, retrieval logic, prompts, or business logic
   beyond what's required to relocate code into classes.
