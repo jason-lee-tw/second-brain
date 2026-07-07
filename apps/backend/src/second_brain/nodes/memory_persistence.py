@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from typing import Any
+from typing import Any, override
 
 from sqlmodel import Session
 
@@ -19,6 +19,7 @@ from second_brain.db.models import LearnedFact, ModelCorrection
 from second_brain.db.pool import get_pgvector_pool
 from second_brain.db.session import engine
 from second_brain.graphs.state import CorrectionUpdate, FactUpdate, SecondBrainState
+from second_brain.nodes.base_node import BaseNode
 from second_brain.services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
@@ -137,55 +138,61 @@ async def _persist_fact(
   return None
 
 
-async def memory_persistence_node(state: SecondBrainState) -> dict[str, Any]:
+class MemoryPersistenceNode(BaseNode[SecondBrainState, dict[str, Any]]):
   """Tool-call node: embeds and persists fact_updates + correction_updates."""
-  fact_updates: list[FactUpdate] = state.get("fact_updates") or []
-  correction_updates: list[CorrectionUpdate] = state.get("correction_updates") or []
-  session_id: str = state["session_id"]
-  final_answer: str = state.get("final_answer", "")
 
-  # F1 fix: if we are resolving a conflict from a prior turn, skip _conflict_check
-  # even when the LLM omits conflicts_with — prevents re-entering conflict state.
-  coming_from_conflict: bool = state.get("awaiting_conflict_clarification", False)  # type: ignore[union-attr]
+  @override
+  async def __call__(self, state: SecondBrainState) -> dict[str, Any]:
+    fact_updates: list[FactUpdate] = state.get("fact_updates") or []
+    correction_updates: list[CorrectionUpdate] = state.get("correction_updates") or []
+    session_id: str = state["session_id"]
+    final_answer: str = state.get("final_answer", "")
 
-  conflict_contexts: list[dict[str, Any]] = []
-  pending_facts: list[dict[str, Any]] = []
+    # F1 fix: if we are resolving a conflict from a prior turn, skip _conflict_check
+    # even when the LLM omits conflicts_with — prevents re-entering conflict state.
+    coming_from_conflict: bool = state.get("awaiting_conflict_clarification", False)  # type: ignore[union-attr]
 
-  for fact_update in fact_updates:
-    conflict = await _persist_fact(
-      fact_update, session_id, skip_conflict_check=coming_from_conflict
-    )
-    if conflict is not None:
-      conflict_contexts.append(conflict)
-      pending_facts.append(
-        {
-          "fact": fact_update["fact"],
-          "confidence": fact_update["confidence"],
-          "conflicts_with": [conflict["existing_id"]],
-        }
+    conflict_contexts: list[dict[str, Any]] = []
+    pending_facts: list[dict[str, Any]] = []
+
+    for fact_update in fact_updates:
+      conflict = await _persist_fact(
+        fact_update, session_id, skip_conflict_check=coming_from_conflict
+      )
+      if conflict is not None:
+        conflict_contexts.append(conflict)
+        pending_facts.append(
+          {
+            "fact": fact_update["fact"],
+            "confidence": fact_update["confidence"],
+            "conflicts_with": [conflict["existing_id"]],
+          }
+        )
+
+    for correction in correction_updates:
+      embedding = await embed_text(correction["correction"])
+      await asyncio.to_thread(
+        _retry_write, _write_correction, correction, session_id, embedding
       )
 
-  for correction in correction_updates:
-    embedding = await embed_text(correction["correction"])
-    await asyncio.to_thread(
-      _retry_write, _write_correction, correction, session_id, embedding
-    )
+    # Set awaiting_correction AFTER memory_agent so the flag is available in the
+    # NEXT turn's memory_agent (cross-turn correction detection).
+    result: dict[str, Any] = {
+      "awaiting_correction": state.get("is_uncertain", False),
+      "awaiting_conflict_clarification": bool(conflict_contexts),
+      "conflict_context": conflict_contexts,
+      "fact_updates": pending_facts if conflict_contexts else [],
+      "correction_updates": [],
+    }
 
-  # Set awaiting_correction AFTER memory_agent so the flag is available in the
-  # NEXT turn's memory_agent (cross-turn correction detection).
-  result: dict[str, Any] = {
-    "awaiting_correction": state.get("is_uncertain", False),
-    "awaiting_conflict_clarification": bool(conflict_contexts),
-    "conflict_context": conflict_contexts,
-    "fact_updates": pending_facts if conflict_contexts else [],
-    "correction_updates": [],
-  }
+    if conflict_contexts:
+      conflict_msg = "\n\n⚠️ I noticed potential conflicts with existing memory:\n"
+      for c in conflict_contexts:
+        conflict_msg += f'- Existing: "{c["existing"]}" | New: "{c["new"]}"\n'
+      conflict_msg += "Please clarify which is correct (or if both apply)."
+      result["final_answer"] = final_answer + conflict_msg
 
-  if conflict_contexts:
-    conflict_msg = "\n\n⚠️ I noticed potential conflicts with existing memory:\n"
-    for c in conflict_contexts:
-      conflict_msg += f'- Existing: "{c["existing"]}" | New: "{c["new"]}"\n'
-    conflict_msg += "Please clarify which is correct (or if both apply)."
-    result["final_answer"] = final_answer + conflict_msg
+    return result
 
-  return result
+
+memory_persistence_node = MemoryPersistenceNode()
