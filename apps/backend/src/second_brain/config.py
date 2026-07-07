@@ -19,7 +19,6 @@ class Settings(BaseSettings):
   pending_docs_dir: Path = Path("temp/pending-digest-docs")
 
   # Model names
-  ingestion_model: str = "claude-haiku-4-5"
   embedding_model: str = "qwen3-embedding:0.6b"
 
   # Memory behaviour — calibrated for qwen3-embedding:0.6b which scores all
