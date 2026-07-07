@@ -65,7 +65,9 @@ async def test_synthesize_answer_raises_on_list_content_query():
     routing_decision="rag",
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -104,7 +106,9 @@ async def test_synthesize_answer_returns_answer_and_confidence():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -132,7 +136,9 @@ async def test_synthesize_answer_is_uncertain_when_confidence_below_threshold():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -156,7 +162,9 @@ async def test_synthesize_answer_applies_confidence_floor_for_neither_routing():
     routing_decision="neither",
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -182,7 +190,9 @@ async def test_synthesize_answer_floor_does_not_lower_confidence_above_floor():
     routing_decision="neither",
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -228,7 +238,9 @@ async def test_synthesize_answer_trims_messages_to_last_10():
     captured_prompt.append(prompt)
     return mock_output
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(side_effect=capture_invoke)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -267,7 +279,9 @@ async def test_synthesize_answer_context_used_rag_only():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -290,7 +304,9 @@ async def test_synthesize_answer_context_used_web_only():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -318,7 +334,9 @@ async def test_synthesize_answer_context_used_memory_only():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -355,7 +373,9 @@ async def test_synthesize_answer_context_used_combines_all_three_in_order():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -379,7 +399,9 @@ async def test_synthesize_answer_context_used_empty_when_no_context():
     routing_decision="neither",
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
