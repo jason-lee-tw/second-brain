@@ -28,26 +28,26 @@ Choose the routing_decision that best serves the user."""
 
 
 class _RoutingOutput(BaseModel):
-    routing_decision: Literal["rag", "web", "both", "neither"]
+  routing_decision: Literal["rag", "web", "both", "neither"]
 
 
 _structured_llm = ChatAnthropic(model="claude-haiku-4-5").with_structured_output(  # pyright: ignore[reportCallIssue]  # langchain-anthropic stubs don't expose model= as __init__ kwarg
-    _RoutingOutput
+  _RoutingOutput
 )
 
 
 async def route_query(state: SecondBrainState) -> RouteQueryOutput:
-    """Graph node: LLM-powered routing using claude-haiku-4-5.
+  """Graph node: LLM-powered routing using claude-haiku-4-5.
 
-    Reads messages[-1].content and retrieved_memory, outputs routing_decision.
-    """
-    query = get_str_content(state["messages"][-1])
-    memory = state.get("retrieved_memory", [])
-    memory_context = (
-        "\n".join(f"- {m['fact']}" for m in memory)
-        if memory
-        else "No memory context available."
-    )
-    prompt = _ROUTING_PROMPT.format(memory_context=memory_context, query=query)
-    result: _RoutingOutput = await _structured_llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
-    return {"routing_decision": result.routing_decision}
+  Reads messages[-1].content and retrieved_memory, outputs routing_decision.
+  """
+  query = get_str_content(state["messages"][-1])
+  memory = state.get("retrieved_memory", [])
+  memory_context = (
+    "\n".join(f"- {m['fact']}" for m in memory)
+    if memory
+    else "No memory context available."
+  )
+  prompt = _ROUTING_PROMPT.format(memory_context=memory_context, query=query)
+  result: _RoutingOutput = await _structured_llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
+  return {"routing_decision": result.routing_decision}

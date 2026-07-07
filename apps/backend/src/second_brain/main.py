@@ -18,32 +18,32 @@ _logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    provider = setup_tracing(
-        phoenix_collection_endpoint=settings.phoenix_collection_endpoint
-    )
-    yield
-    try:
-        provider.shutdown()
-    # ponytail: teardown broad-catch — shutdown errors are unactionable at exit;
-    # exc_info=True preserves visibility without propagating into ASGI teardown
-    except Exception:
-        _logger.warning("TracerProvider shutdown raised an exception", exc_info=True)
-    try:
-        await embeddings.shutdown()
-    except Exception:
-        _logger.warning("embeddings.shutdown() raised an exception", exc_info=True)
-    try:
-        await ingestion_agent.shutdown()
-    except Exception:
-        _logger.warning("ingestion_agent.shutdown() raised an exception", exc_info=True)
-    try:
-        await shutdown_query_graph()
-    except Exception:
-        _logger.warning("shutdown_query_graph() raised an exception", exc_info=True)
-    try:
-        await shutdown_pgvector_pool()
-    except Exception:
-        _logger.warning("shutdown_pgvector_pool() raised an exception", exc_info=True)
+  provider = setup_tracing(
+    phoenix_collection_endpoint=settings.phoenix_collection_endpoint
+  )
+  yield
+  try:
+    provider.shutdown()
+  # ponytail: teardown broad-catch — shutdown errors are unactionable at exit;
+  # exc_info=True preserves visibility without propagating into ASGI teardown
+  except Exception:
+    _logger.warning("TracerProvider shutdown raised an exception", exc_info=True)
+  try:
+    await embeddings.shutdown()
+  except Exception:
+    _logger.warning("embeddings.shutdown() raised an exception", exc_info=True)
+  try:
+    await ingestion_agent.shutdown()
+  except Exception:
+    _logger.warning("ingestion_agent.shutdown() raised an exception", exc_info=True)
+  try:
+    await shutdown_query_graph()
+  except Exception:
+    _logger.warning("shutdown_query_graph() raised an exception", exc_info=True)
+  try:
+    await shutdown_pgvector_pool()
+  except Exception:
+    _logger.warning("shutdown_pgvector_pool() raised an exception", exc_info=True)
 
 
 app = FastAPI(title="Second Brain", version="0.1.0", lifespan=lifespan)
@@ -58,4 +58,4 @@ app.include_router(query_router)
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+  return {"status": "ok"}

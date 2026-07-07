@@ -5,310 +5,310 @@ import typing
 from langchain_core.messages import HumanMessage
 
 from second_brain.graphs.state import (
-    CorrectionUpdate,
-    FactUpdate,
-    IngestionAgentOutput,
-    MemoryItem,
-    PickFileOutput,
-    RagResult,
-    RagRetrievalOutput,
-    RedactInboundOutput,
-    RedactOutboundOutput,
-    RetrieveMemoryOutput,
-    RouteQueryOutput,
-    SecondBrainState,
-    SynthesisNodeOutput,
-    WebResearchOutput,
-    WebResult,
+  CorrectionUpdate,
+  FactUpdate,
+  IngestionAgentOutput,
+  MemoryItem,
+  PickFileOutput,
+  RagResult,
+  RagRetrievalOutput,
+  RedactInboundOutput,
+  RedactOutboundOutput,
+  RetrieveMemoryOutput,
+  RouteQueryOutput,
+  SecondBrainState,
+  SynthesisNodeOutput,
+  WebResearchOutput,
+  WebResult,
 )
 from second_brain.services.chunking import ChunkMetadata
 
 _FULL_META: ChunkMetadata = {
-    "source": "file.md",
-    "heading_path": "",
-    "content_type": "article",
-    "char_count": 42,
+  "source": "file.md",
+  "heading_path": "",
+  "content_type": "article",
+  "char_count": 42,
 }
 
 
 def test_rag_result_construction():
-    """RagResult TypedDict can be constructed with all required keys."""
-    result: RagResult = {
-        "content": "Some chunk content",
-        "score": 0.87,
-        "chunk_index": 2,
-        "metadata": _FULL_META,
-    }
-    assert result["content"] == "Some chunk content"
-    assert result["score"] == 0.87
-    assert result["chunk_index"] == 2
-    assert result["metadata"] == _FULL_META
+  """RagResult TypedDict can be constructed with all required keys."""
+  result: RagResult = {
+    "content": "Some chunk content",
+    "score": 0.87,
+    "chunk_index": 2,
+    "metadata": _FULL_META,
+  }
+  assert result["content"] == "Some chunk content"
+  assert result["score"] == 0.87
+  assert result["chunk_index"] == 2
+  assert result["metadata"] == _FULL_META
 
 
 def test_web_result_construction():
-    """WebResult TypedDict can be constructed with all required keys."""
-    result: WebResult = {
-        "title": "Example Article",
-        "url": "https://example.com/article",
-        "content": "Article body text",
-    }
-    assert result["title"] == "Example Article"
-    assert result["url"] == "https://example.com/article"
-    assert result["content"] == "Article body text"
+  """WebResult TypedDict can be constructed with all required keys."""
+  result: WebResult = {
+    "title": "Example Article",
+    "url": "https://example.com/article",
+    "content": "Article body text",
+  }
+  assert result["title"] == "Example Article"
+  assert result["url"] == "https://example.com/article"
+  assert result["content"] == "Article body text"
 
 
 def test_memory_item_construction():
-    """MemoryItem TypedDict can be constructed with all required keys."""
-    item: MemoryItem = {
-        "id": "mem-001",
-        "fact": "Python was created by Guido van Rossum",
-        "confidence": 0.95,
-        "type": "learned_fact",
-    }
-    assert item["id"] == "mem-001"
-    assert item["type"] == "learned_fact"
+  """MemoryItem TypedDict can be constructed with all required keys."""
+  item: MemoryItem = {
+    "id": "mem-001",
+    "fact": "Python was created by Guido van Rossum",
+    "confidence": 0.95,
+    "type": "learned_fact",
+  }
+  assert item["id"] == "mem-001"
+  assert item["type"] == "learned_fact"
 
-    correction: MemoryItem = {
-        "id": "mem-002",
-        "fact": "The correction text",
-        "confidence": 0.8,
-        "type": "model_correction",
-    }
-    assert correction["type"] == "model_correction"
+  correction: MemoryItem = {
+    "id": "mem-002",
+    "fact": "The correction text",
+    "confidence": 0.8,
+    "type": "model_correction",
+  }
+  assert correction["type"] == "model_correction"
 
 
 def test_fact_update_construction():
-    """FactUpdate TypedDict can be constructed with all required keys."""
-    update: FactUpdate = {
-        "fact": "New discovered fact",
-        "confidence": 0.9,
-        "conflicts_with": ["old-fact-id-1"],
-    }
-    assert update["fact"] == "New discovered fact"
-    assert update["conflicts_with"] == ["old-fact-id-1"]
+  """FactUpdate TypedDict can be constructed with all required keys."""
+  update: FactUpdate = {
+    "fact": "New discovered fact",
+    "confidence": 0.9,
+    "conflicts_with": ["old-fact-id-1"],
+  }
+  assert update["fact"] == "New discovered fact"
+  assert update["conflicts_with"] == ["old-fact-id-1"]
 
 
 def test_correction_update_construction():
-    """CorrectionUpdate TypedDict can be constructed with all required keys."""
-    update: CorrectionUpdate = {
-        "original_answer": "Wrong answer",
-        "correction": "Right answer",
-        "root_cause": "Hallucination",
-    }
-    assert update["original_answer"] == "Wrong answer"
-    assert update["correction"] == "Right answer"
-    assert update["root_cause"] == "Hallucination"
+  """CorrectionUpdate TypedDict can be constructed with all required keys."""
+  update: CorrectionUpdate = {
+    "original_answer": "Wrong answer",
+    "correction": "Right answer",
+    "root_cause": "Hallucination",
+  }
+  assert update["original_answer"] == "Wrong answer"
+  assert update["correction"] == "Right answer"
+  assert update["root_cause"] == "Hallucination"
 
 
 def test_deferred_fields_are_not_required():
-    """The 5 memory-correction fields must be annotated as NotRequired[...].
+  """The 5 memory-correction fields must be annotated as NotRequired[...].
 
-    This is the TDD red test: it verifies the type annotation metadata, not
-    runtime TypedDict enforcement.  It fails before the NotRequired wrapping
-    is applied in state.py and passes after.
-    """
-    hints = typing.get_type_hints(SecondBrainState, include_extras=True)
-    deferred_fields = [
-        "awaiting_correction",
-        "awaiting_conflict_clarification",
-        "conflict_context",
-        "fact_updates",
-        "correction_updates",
-    ]
-    for field in deferred_fields:
-        hint = hints[field]
-        assert typing.get_origin(hint) is typing.NotRequired, (
-            f"Field {field!r} must be annotated as NotRequired[...]; got {hint!r}"
-        )
+  This is the TDD red test: it verifies the type annotation metadata, not
+  runtime TypedDict enforcement.  It fails before the NotRequired wrapping
+  is applied in state.py and passes after.
+  """
+  hints = typing.get_type_hints(SecondBrainState, include_extras=True)
+  deferred_fields = [
+    "awaiting_correction",
+    "awaiting_conflict_clarification",
+    "conflict_context",
+    "fact_updates",
+    "correction_updates",
+  ]
+  for field in deferred_fields:
+    hint = hints[field]
+    assert typing.get_origin(hint) is typing.NotRequired, (
+      f"Field {field!r} must be annotated as NotRequired[...]; got {hint!r}"
+    )
 
 
 def test_second_brain_state_minimal_construction():
-    """SecondBrainState can be constructed without the optional deferred fields."""
-    state: SecondBrainState = {
-        "session_id": "test-session-001",
-        "messages": [HumanMessage(content="Hello")],
-        "rag_results": [],
-        "web_results": [],
-        "retrieved_memory": [],
-        "routing_decision": "neither",
-        "final_answer": "",
-        "confidence": 0.9,
-        "is_uncertain": False,
-    }
-    assert state["session_id"] == "test-session-001"
-    assert len(state["messages"]) == 1
-    assert state["routing_decision"] == "neither"
-    assert state["final_answer"] == ""
-    assert state["confidence"] == 0.9
+  """SecondBrainState can be constructed without the optional deferred fields."""
+  state: SecondBrainState = {
+    "session_id": "test-session-001",
+    "messages": [HumanMessage(content="Hello")],
+    "rag_results": [],
+    "web_results": [],
+    "retrieved_memory": [],
+    "routing_decision": "neither",
+    "final_answer": "",
+    "confidence": 0.9,
+    "is_uncertain": False,
+  }
+  assert state["session_id"] == "test-session-001"
+  assert len(state["messages"]) == 1
+  assert state["routing_decision"] == "neither"
+  assert state["final_answer"] == ""
+  assert state["confidence"] == 0.9
 
 
 def test_second_brain_state_routing_decision_values():
-    """SecondBrainState routing_decision accepts all valid Literal values."""
-    for routing in ("rag", "web", "both", "neither"):
-        state: SecondBrainState = {
-            "session_id": "test-session-002",
-            "messages": [],
-            "rag_results": [],
-            "web_results": [],
-            "retrieved_memory": [],
-            "routing_decision": routing,  # type: ignore[typeddict-item]
-            "final_answer": "answer",
-            "confidence": 0.7,
-            "is_uncertain": True,
-        }
-        assert state["routing_decision"] == routing
+  """SecondBrainState routing_decision accepts all valid Literal values."""
+  for routing in ("rag", "web", "both", "neither"):
+    state: SecondBrainState = {
+      "session_id": "test-session-002",
+      "messages": [],
+      "rag_results": [],
+      "web_results": [],
+      "retrieved_memory": [],
+      "routing_decision": routing,  # type: ignore[typeddict-item]
+      "final_answer": "answer",
+      "confidence": 0.7,
+      "is_uncertain": True,
+    }
+    assert state["routing_decision"] == routing
 
 
 def test_second_brain_state_with_rag_results():
-    """SecondBrainState accepts non-empty rag_results and web_results."""
-    rag: RagResult = {
-        "content": "chunk text",
-        "score": 0.92,
-        "chunk_index": 0,
-        "metadata": _FULL_META,
-    }
-    web: WebResult = {
-        "title": "Page Title",
-        "url": "https://example.com",
-        "content": "page content",
-    }
-    state: SecondBrainState = {
-        "session_id": "s-003",
-        "messages": [],
-        "rag_results": [rag],
-        "web_results": [web],
-        "retrieved_memory": [],
-        "routing_decision": "both",
-        "final_answer": "combined answer",
-        "confidence": 0.85,
-        "is_uncertain": False,
-    }
-    assert len(state["rag_results"]) == 1
-    assert state["rag_results"][0]["score"] == 0.92
-    assert len(state["web_results"]) == 1
-    assert state["web_results"][0]["url"] == "https://example.com"
+  """SecondBrainState accepts non-empty rag_results and web_results."""
+  rag: RagResult = {
+    "content": "chunk text",
+    "score": 0.92,
+    "chunk_index": 0,
+    "metadata": _FULL_META,
+  }
+  web: WebResult = {
+    "title": "Page Title",
+    "url": "https://example.com",
+    "content": "page content",
+  }
+  state: SecondBrainState = {
+    "session_id": "s-003",
+    "messages": [],
+    "rag_results": [rag],
+    "web_results": [web],
+    "retrieved_memory": [],
+    "routing_decision": "both",
+    "final_answer": "combined answer",
+    "confidence": 0.85,
+    "is_uncertain": False,
+  }
+  assert len(state["rag_results"]) == 1
+  assert state["rag_results"][0]["score"] == 0.92
+  assert len(state["web_results"]) == 1
+  assert state["web_results"][0]["url"] == "https://example.com"
 
 
 def test_chunk_metadata_construction():
-    meta: ChunkMetadata = {
-        "source": "intro.md",
-        "heading_path": "Getting Started > Install",
-        "content_type": "article",
-        "char_count": 512,
-    }
-    assert meta["source"] == "intro.md"
-    assert meta["char_count"] == 512
+  meta: ChunkMetadata = {
+    "source": "intro.md",
+    "heading_path": "Getting Started > Install",
+    "content_type": "article",
+    "char_count": 512,
+  }
+  assert meta["source"] == "intro.md"
+  assert meta["char_count"] == 512
 
 
 def test_pick_file_output_with_files():
-    out: PickFileOutput = {"in_progress": "doc.md", "files": ["b.md"]}
-    assert out["in_progress"] == "doc.md"
+  out: PickFileOutput = {"in_progress": "doc.md", "files": ["b.md"]}
+  assert out["in_progress"] == "doc.md"
 
 
 def test_pick_file_output_without_files():
-    out: PickFileOutput = {"in_progress": None}
-    assert out["in_progress"] is None
+  out: PickFileOutput = {"in_progress": None}
+  assert out["in_progress"] is None
 
 
 def test_ingestion_agent_output_success():
-    out: IngestionAgentOutput = {
-        "processed": ["doc.md"],
-        "in_progress": None,
-        "retry_queue": [],
-    }
-    assert out["processed"] == ["doc.md"]
+  out: IngestionAgentOutput = {
+    "processed": ["doc.md"],
+    "in_progress": None,
+    "retry_queue": [],
+  }
+  assert out["processed"] == ["doc.md"]
 
 
 def test_ingestion_agent_output_terminal_failure():
-    from second_brain.graphs.state import FailedFile
+  from second_brain.graphs.state import FailedFile
 
-    entry: FailedFile = {"filename": "bad.md", "error": "boom", "retry_count": 3}
-    out: IngestionAgentOutput = {
-        "in_progress": None,
-        "retry_queue": [],
-        "failed": [entry],
-    }
-    assert out["failed"][0]["filename"] == "bad.md"
+  entry: FailedFile = {"filename": "bad.md", "error": "boom", "retry_count": 3}
+  out: IngestionAgentOutput = {
+    "in_progress": None,
+    "retry_queue": [],
+    "failed": [entry],
+  }
+  assert out["failed"][0]["filename"] == "bad.md"
 
 
 def test_redact_inbound_output():
-    from langchain_core.messages import HumanMessage
+  from langchain_core.messages import HumanMessage
 
-    out: RedactInboundOutput = {"messages": [HumanMessage(content="hi")]}
-    assert len(out["messages"]) == 1
+  out: RedactInboundOutput = {"messages": [HumanMessage(content="hi")]}
+  assert len(out["messages"]) == 1
 
 
 def test_redact_outbound_output():
-    out: RedactOutboundOutput = {"final_answer": "safe answer"}
-    assert out["final_answer"] == "safe answer"
+  out: RedactOutboundOutput = {"final_answer": "safe answer"}
+  assert out["final_answer"] == "safe answer"
 
 
 def test_retrieve_memory_output():
-    out: RetrieveMemoryOutput = {"retrieved_memory": []}
-    assert out["retrieved_memory"] == []
+  out: RetrieveMemoryOutput = {"retrieved_memory": []}
+  assert out["retrieved_memory"] == []
 
 
 def test_route_query_output():
-    out: RouteQueryOutput = {"routing_decision": "rag"}
-    assert out["routing_decision"] == "rag"
+  out: RouteQueryOutput = {"routing_decision": "rag"}
+  assert out["routing_decision"] == "rag"
 
 
 def test_rag_retrieval_output():
-    from second_brain.graphs.state import RagResult
+  from second_brain.graphs.state import RagResult
 
-    result: RagResult = {
-        "content": "chunk",
-        "score": 0.9,
-        "chunk_index": 0,
-        "metadata": {
-            "source": "f.md",
-            "heading_path": "",
-            "content_type": "article",
-            "char_count": 100,
-        },
-    }
-    out: RagRetrievalOutput = {"rag_results": [result]}
-    assert len(out["rag_results"]) == 1
+  result: RagResult = {
+    "content": "chunk",
+    "score": 0.9,
+    "chunk_index": 0,
+    "metadata": {
+      "source": "f.md",
+      "heading_path": "",
+      "content_type": "article",
+      "char_count": 100,
+    },
+  }
+  out: RagRetrievalOutput = {"rag_results": [result]}
+  assert len(out["rag_results"]) == 1
 
 
 def test_web_research_output():
-    from second_brain.graphs.state import WebResult
+  from second_brain.graphs.state import WebResult
 
-    r: WebResult = {"title": "T", "url": "https://x.com", "content": "body"}
-    out: WebResearchOutput = {"web_results": [r]}
-    assert len(out["web_results"]) == 1
+  r: WebResult = {"title": "T", "url": "https://x.com", "content": "body"}
+  out: WebResearchOutput = {"web_results": [r]}
+  assert len(out["web_results"]) == 1
 
 
 def test_synthesis_node_output():
-    out: SynthesisNodeOutput = {
-        "final_answer": "42",
-        "confidence": 0.9,
-        "is_uncertain": False,
-        "context_used": ["some context"],
-    }
-    assert out["final_answer"] == "42"
-    assert not out["is_uncertain"]
-    assert out["context_used"] == ["some context"]
+  out: SynthesisNodeOutput = {
+    "final_answer": "42",
+    "confidence": 0.9,
+    "is_uncertain": False,
+    "context_used": ["some context"],
+  }
+  assert out["final_answer"] == "42"
+  assert not out["is_uncertain"]
+  assert out["context_used"] == ["some context"]
 
 
 def test_rag_result_metadata_is_typed():
-    hints = typing.get_type_hints(RagResult)
-    # metadata is now ChunkMetadata | None (Optional[ChunkMetadata])
-    args = typing.get_args(hints["metadata"])
-    assert ChunkMetadata in args
-    assert type(None) in args
+  hints = typing.get_type_hints(RagResult)
+  # metadata is now ChunkMetadata | None (Optional[ChunkMetadata])
+  args = typing.get_args(hints["metadata"])
+  assert ChunkMetadata in args
+  assert type(None) in args
 
 
 def test_rag_result_metadata_can_be_none():
-    result: RagResult = {
-        "content": "chunk with no metadata",
-        "score": 0.5,
-        "chunk_index": 0,
-        "metadata": None,
-    }
-    assert result["metadata"] is None
+  result: RagResult = {
+    "content": "chunk with no metadata",
+    "score": 0.5,
+    "chunk_index": 0,
+    "metadata": None,
+  }
+  assert result["metadata"] is None
 
 
 def test_pick_file_output_files_is_not_required():
-    hints = typing.get_type_hints(PickFileOutput, include_extras=True)
-    assert typing.get_origin(hints["files"]) is typing.NotRequired
+  hints = typing.get_type_hints(PickFileOutput, include_extras=True)
+  assert typing.get_origin(hints["files"]) is typing.NotRequired

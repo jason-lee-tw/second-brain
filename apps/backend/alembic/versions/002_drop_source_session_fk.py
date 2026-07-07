@@ -18,26 +18,26 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.drop_constraint(
-        "learned_facts_source_session_fkey", "learned_facts", type_="foreignkey"
-    )
-    op.drop_constraint(
-        "model_corrections_source_session_fkey", "model_corrections", type_="foreignkey"
-    )
+  op.drop_constraint(
+    "learned_facts_source_session_fkey", "learned_facts", type_="foreignkey"
+  )
+  op.drop_constraint(
+    "model_corrections_source_session_fkey", "model_corrections", type_="foreignkey"
+  )
 
 
 def downgrade() -> None:
-    op.create_foreign_key(
-        "learned_facts_source_session_fkey",
-        "learned_facts",
-        "chat_history",
-        ["source_session"],
-        ["session_id"],
-    )
-    op.create_foreign_key(
-        "model_corrections_source_session_fkey",
-        "model_corrections",
-        "chat_history",
-        ["source_session"],
-        ["session_id"],
-    )
+  op.create_foreign_key(
+    "learned_facts_source_session_fkey",
+    "learned_facts",
+    "chat_history",
+    ["source_session"],
+    ["session_id"],
+  )
+  op.create_foreign_key(
+    "model_corrections_source_session_fkey",
+    "model_corrections",
+    "chat_history",
+    ["source_session"],
+    ["session_id"],
+  )
