@@ -4,12 +4,14 @@ Searches learned_facts + model_corrections tables.
 """
 
 import asyncio
+from typing import override
 
 import asyncpg
 
 from second_brain.config import settings
 from second_brain.db.pool import get_pgvector_pool
 from second_brain.graphs.state import MemoryItem, RetrieveMemoryOutput, SecondBrainState
+from second_brain.nodes.base_node import BaseNode
 from second_brain.services.embeddings import embed_text
 from second_brain.utils import get_str_content, last_human_message
 
@@ -68,25 +70,31 @@ async def _search_corrections(
     ]
 
 
-async def memory_retrieval_node(state: SecondBrainState) -> RetrieveMemoryOutput:
+class MemoryRetrievalNode(BaseNode[SecondBrainState, RetrieveMemoryOutput]):
   """Embed current query and run two parallel cosine searches.
 
   Fails hard on Ollama unavailability — no empty-list fallback.
   """
-  last_human = last_human_message(state["messages"])
-  if last_human is None:
-    return {"retrieved_memory": []}
 
-  query_text = get_str_content(last_human)
-  embedding = await embed_text(query_text)  # raises if Ollama is down
+  @override
+  async def __call__(self, state: SecondBrainState) -> RetrieveMemoryOutput:
+    last_human = last_human_message(state["messages"])
+    if last_human is None:
+      return {"retrieved_memory": []}
 
-  pool = await get_pgvector_pool()
-  facts_scored, corrections_scored = await asyncio.gather(
-    _search_facts(pool, embedding),
-    _search_corrections(pool, embedding),
-  )
+    query_text = get_str_content(last_human)
+    embedding = await embed_text(query_text)  # raises if Ollama is down
 
-  all_scored = sorted(
-    facts_scored + corrections_scored, key=lambda x: x[0], reverse=True
-  )
-  return {"retrieved_memory": [item for _, item in all_scored]}
+    pool = await get_pgvector_pool()
+    facts_scored, corrections_scored = await asyncio.gather(
+      _search_facts(pool, embedding),
+      _search_corrections(pool, embedding),
+    )
+
+    all_scored = sorted(
+      facts_scored + corrections_scored, key=lambda x: x[0], reverse=True
+    )
+    return {"retrieved_memory": [item for _, item in all_scored]}
+
+
+memory_retrieval_node = MemoryRetrievalNode()
