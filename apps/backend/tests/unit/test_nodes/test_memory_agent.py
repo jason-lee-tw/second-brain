@@ -48,7 +48,7 @@ async def test_case1_extracts_user_facts():
     messages=[HumanMessage(content="I work as a software engineer in Berlin.")]
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(
       return_value=_output(
         MemoryCase.FACT_EXTRACTION,
@@ -77,7 +77,7 @@ async def test_case1_no_facts_in_generic_message():
 
   state = _make_state(messages=[HumanMessage(content="What is the tallest mountain?")])
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_output(MemoryCase.FACT_EXTRACTION))
     result = await memory_agent_node(state)
 
@@ -101,7 +101,7 @@ async def test_case2_extracts_correction():
     awaiting_correction=True,
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(
       return_value=_output(
         MemoryCase.CORRECTION,
@@ -138,7 +138,7 @@ async def test_case2_unrelated_query_resets_awaiting_correction():
     awaiting_correction=True,
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_output(MemoryCase.FACT_EXTRACTION))
     result = await memory_agent_node(state)
 
@@ -174,7 +174,7 @@ async def test_case3_resolves_conflict_and_resets_flags():
     ],
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(
       return_value=_output(
         MemoryCase.CONFLICT_RESOLUTION,
@@ -221,7 +221,7 @@ async def test_case3_keep_existing_returns_empty_fact_updates():
     ],
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_output(MemoryCase.CONFLICT_RESOLUTION))
     result = await memory_agent_node(state)
 
