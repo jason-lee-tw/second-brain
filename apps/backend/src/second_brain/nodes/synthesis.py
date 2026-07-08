@@ -42,7 +42,7 @@ class SynthesisNode(BaseAgentNode[SecondBrainState, SynthesisNodeOutput]):
   """Generates a final answer with confidence scoring."""
 
   def __init__(self):
-    super().__init__(ClaudeAgent(CLAUDE_MODEL_NAME.SONNET))
+    super().__init__(ClaudeAgent(CLAUDE_MODEL_NAME.SONNET, temperature=None))
     self._structured_llm = self._agent.get_model().with_structured_output(
       _SynthesisOutput
     )

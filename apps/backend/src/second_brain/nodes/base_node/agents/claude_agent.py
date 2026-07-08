@@ -17,18 +17,29 @@ class ClaudeAgent(BaseAgent):
     self,
     model_name: CLAUDE_MODEL_NAME,
     timeout_in_second: int = 180,
-    temperature: float = 0.7,
+    temperature: float | None = 0.7,
     max_retries: int = 3,
   ):
     api_key = settings.anthropic_api_key
 
-    model = ChatAnthropic(
-      api_key=api_key,
-      temperature=temperature,
-      model_name=model_name,
-      stop=None,
-      timeout=timeout_in_second,
-      max_retries=max_retries,
-    )
+    # Some models (e.g. claude-sonnet-5) reject the `temperature` kwarg outright,
+    # so it must be omitted entirely rather than forwarded as None.
+    if temperature is None:
+      model = ChatAnthropic(
+        api_key=api_key,
+        model_name=model_name,
+        stop=None,
+        timeout=timeout_in_second,
+        max_retries=max_retries,
+      )
+    else:
+      model = ChatAnthropic(
+        api_key=api_key,
+        temperature=temperature,
+        model_name=model_name,
+        stop=None,
+        timeout=timeout_in_second,
+        max_retries=max_retries,
+      )
 
     super().__init__(model)
