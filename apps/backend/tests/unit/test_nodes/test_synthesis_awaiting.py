@@ -35,7 +35,9 @@ async def test_synthesis_sets_is_uncertain_when_low_confidence():
   mock_output.confidence = 0.5
   mock_output.reasoning = "Limited context."
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     result = await synthesize_answer(_make_state())
 
@@ -53,7 +55,9 @@ async def test_synthesis_sets_is_uncertain_false_when_confident():
   mock_output.confidence = 0.95
   mock_output.reasoning = "Well established."
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     result = await synthesize_answer(_make_state())
 
