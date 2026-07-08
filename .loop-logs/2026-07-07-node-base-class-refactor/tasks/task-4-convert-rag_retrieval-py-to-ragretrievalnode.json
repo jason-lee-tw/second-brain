@@ -1,0 +1,9 @@
+{
+  "task_id": "task-4-convert-rag_retrieval-py-to-ragretrievalnode",
+  "plan": "docs/superpowers/plans/2026-07-07-node-base-class-refactor.md",
+  "spec": "docs/superpowers/specs/2026-07-07-node-base-class-refactor-design.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-4-convert-rag_retrieval-py-to-ragretrievalnode",
+  "completed_steps": ["tdd-loop-complete"]
+}

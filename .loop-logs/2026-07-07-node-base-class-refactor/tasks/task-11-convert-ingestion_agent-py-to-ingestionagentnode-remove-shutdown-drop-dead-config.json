@@ -1,0 +1,9 @@
+{
+  "task_id": "task-11-convert-ingestion_agent-py-to-ingestionagentnode-remove-shutdown-drop-dead-config",
+  "plan": "docs/superpowers/plans/2026-07-07-node-base-class-refactor.md",
+  "spec": "docs/superpowers/specs/2026-07-07-node-base-class-refactor-design.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-11-convert-ingestion_agent-py-to-ingestionagentnode-remove-shutdown-drop-dead-config",
+  "completed_steps": ["tdd-loop-complete"]
+}
