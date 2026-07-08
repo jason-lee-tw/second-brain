@@ -38,3 +38,25 @@ def test_claude_agent_forwards_explicit_temperature(mock_chat_anthropic: MagicMo
 
   _, kwargs = mock_chat_anthropic.call_args
   assert kwargs["temperature"] == 0.2
+
+
+@patch("second_brain.nodes.base_node.agents.claude_agent.ChatAnthropic")
+def test_claude_agent_omits_max_tokens_when_none(mock_chat_anthropic: MagicMock):
+  """When max_tokens is not passed, ChatAnthropic must fall back to its own default.
+
+  Most ClaudeAgent-based nodes (OrchestratorNode, MemoryAgentNode, SynthesisNode)
+  never capped max_tokens before, so the default of None must not forward anything.
+  """
+  ClaudeAgent(CLAUDE_MODEL_NAME.SONNET)
+
+  _, kwargs = mock_chat_anthropic.call_args
+  assert "max_tokens" not in kwargs
+
+
+@patch("second_brain.nodes.base_node.agents.claude_agent.ChatAnthropic")
+def test_claude_agent_forwards_explicit_max_tokens(mock_chat_anthropic: MagicMock):
+  """An explicit max_tokens is forwarded as-is (e.g. IngestionAgentNode caps at 150)."""
+  ClaudeAgent(CLAUDE_MODEL_NAME.HAIKU, max_tokens=150)
+
+  _, kwargs = mock_chat_anthropic.call_args
+  assert kwargs["max_tokens"] == 150

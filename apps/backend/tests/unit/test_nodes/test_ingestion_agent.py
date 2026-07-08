@@ -27,6 +27,22 @@ def test_chunk_semaphore_is_bounded():
   assert _CHUNK_SEMAPHORE._value == _CHUNK_CONCURRENCY
 
 
+def test_ingestion_agent_node_caps_max_tokens_at_150():
+  """IngestionAgentNode must cap header generation at 150 tokens.
+
+  Regression guard: this cap existed on the raw anthropic.AsyncAnthropic client
+  before the node base-class refactor and must be preserved via ClaudeAgent's
+  max_tokens kwarg, otherwise ChatAnthropic silently falls back to its 1024
+  default for a call that only needs a single short header per chunk.
+  """
+  with patch("second_brain.nodes.ingestion_agent.ClaudeAgent") as mock_claude_agent:
+    from second_brain.nodes.ingestion_agent import CLAUDE_MODEL_NAME, IngestionAgentNode
+
+    IngestionAgentNode()
+
+  mock_claude_agent.assert_called_once_with(CLAUDE_MODEL_NAME.HAIKU, max_tokens=150)
+
+
 @pytest.mark.asyncio
 async def test_successful_ingest_moves_file_to_processed(tmp_path):
   """On successful ingest, filename moves from in_progress to processed."""

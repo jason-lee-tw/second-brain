@@ -62,7 +62,7 @@ class IngestionAgentNode(BaseAgentNode[IngestionState, IngestionAgentOutput]):
   """Process in_progress, update state on success or failure."""
 
   def __init__(self):
-    super().__init__(ClaudeAgent(CLAUDE_MODEL_NAME.HAIKU))
+    super().__init__(ClaudeAgent(CLAUDE_MODEL_NAME.HAIKU, max_tokens=150))
     self._model = self._agent.get_model()
 
   async def _generate_contextual_header(

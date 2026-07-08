@@ -20,6 +20,7 @@ class ClaudeAgent(BaseAgent):
     timeout_in_second: int = 180,
     temperature: float | None = 0.7,
     max_retries: int = 3,
+    max_tokens: int | None = None,
   ):
     api_key = settings.anthropic_api_key
 
@@ -34,6 +35,10 @@ class ClaudeAgent(BaseAgent):
     # so it must be omitted entirely rather than forwarded as None.
     if temperature is not None:
       kwargs["temperature"] = temperature
+    # None means "don't constrain" — let ChatAnthropic use its own default so
+    # other ClaudeAgent-based nodes keep their prior (uncapped) behavior.
+    if max_tokens is not None:
+      kwargs["max_tokens"] = max_tokens
 
     model = ChatAnthropic(**kwargs)
 
