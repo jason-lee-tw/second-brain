@@ -106,9 +106,15 @@ async def test_ac5_pii_redacted_before_llm_sees_message():
       "second_brain.graphs.query_graph.AsyncPostgresSaver",
       _mock_saver_factory(mem_saver),
     ),
-    patch("second_brain.nodes.orchestrator._structured_llm") as mock_orch_llm,
-    patch("second_brain.nodes.synthesis._structured_llm") as mock_synth_llm,
-    patch("second_brain.nodes.memory_agent._llm") as mock_memory_agent_llm,
+    patch(
+      "second_brain.nodes.orchestrator.route_query._structured_llm"
+    ) as mock_orch_llm,
+    patch(
+      "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+    ) as mock_synth_llm,
+    patch(
+      "second_brain.nodes.memory_agent.memory_agent_node._llm"
+    ) as mock_memory_agent_llm,
   ):
     mock_orch_llm.ainvoke = AsyncMock(side_effect=capturing_orch_ainvoke)
     mock_synth_llm.ainvoke = AsyncMock(
@@ -177,9 +183,15 @@ async def test_ac6_pii_redacted_in_final_answer():
       "second_brain.graphs.query_graph.AsyncPostgresSaver",
       _mock_saver_factory(mem_saver),
     ),
-    patch("second_brain.nodes.orchestrator._structured_llm") as mock_orch_llm,
-    patch("second_brain.nodes.synthesis._structured_llm") as mock_synth_llm,
-    patch("second_brain.nodes.memory_agent._llm") as mock_memory_agent_llm,
+    patch(
+      "second_brain.nodes.orchestrator.route_query._structured_llm"
+    ) as mock_orch_llm,
+    patch(
+      "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+    ) as mock_synth_llm,
+    patch(
+      "second_brain.nodes.memory_agent.memory_agent_node._llm"
+    ) as mock_memory_agent_llm,
   ):
     mock_orch_llm.ainvoke = AsyncMock(return_value=_mock_routing("neither"))
     mock_synth_llm.ainvoke = AsyncMock(return_value=_mock_synthesis(pii_answer))
@@ -269,8 +281,12 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
       "second_brain.graphs.query_graph.memory_retrieval_node",
       _stub_memory_retrieval_node,
     ),
-    patch("second_brain.nodes.orchestrator._structured_llm") as mock_orch_llm,
-    patch("second_brain.nodes.synthesis._structured_llm") as mock_synth_llm,
+    patch(
+      "second_brain.nodes.orchestrator.route_query._structured_llm"
+    ) as mock_orch_llm,
+    patch(
+      "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+    ) as mock_synth_llm,
   ):
     mock_orch_llm.ainvoke = AsyncMock(return_value=_mock_routing("neither"))
     mock_synth_llm.ainvoke = AsyncMock(
@@ -308,9 +324,15 @@ async def test_ac10_null_session_id_creates_new_thread_uuid_continues():
         "second_brain.api.routers.query.build_query_graph",
         fake_build_query_graph,
       ),
-      patch("second_brain.nodes.orchestrator._structured_llm") as mock_orch2,
-      patch("second_brain.nodes.synthesis._structured_llm") as mock_synth2,
-      patch("second_brain.nodes.memory_agent._llm") as mock_memory_agent_llm,
+      patch(
+        "second_brain.nodes.orchestrator.route_query._structured_llm"
+      ) as mock_orch2,
+      patch(
+        "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+      ) as mock_synth2,
+      patch(
+        "second_brain.nodes.memory_agent.memory_agent_node._llm"
+      ) as mock_memory_agent_llm,
     ):
       mock_orch2.ainvoke = AsyncMock(return_value=_mock_routing("neither"))
       mock_synth2.ainvoke = AsyncMock(
