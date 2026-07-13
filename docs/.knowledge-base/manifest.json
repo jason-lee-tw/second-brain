@@ -1,13 +1,13 @@
 {
   "entries": {
     "bugs/000-index.md": {
-      "extract_path": ".llm-digested/bugs/000-index.md",
-      "hash": "a5afbbc5b69f2c1b9507baca1cf4fb558239fec16c4359c8394e536c3c5cce4f",
+      "hash": "9e1994d1b8345ddded61d2570f8afb27949ff7727946db15b92abb42664203a6",
       "primary_topic": "known-issues",
       "secondary_topics": [
         "postgres-connection-pooling",
         "integration-testing"
-      ]
+      ],
+      "extract_path": ".llm-digested/bugs/000-index.md"
     },
     "bugs/001-fix-typecheck-error.md": {
       "extract_path": ".llm-digested/bugs/001-fix-typecheck-error.md",
@@ -348,6 +348,50 @@
       "secondary_topics": [
         "dependency-management"
       ]
+    },
+    "bugs/004-synthesis-max-tokens-truncation.md": {
+      "hash": "d36020a7ab7d8acb19f8baeb0e36f3970f3959ad598375a03b9ecefc9f6da6c6",
+      "primary_topic": "synthesis-max-tokens-truncation-fix",
+      "secondary_topics": [
+        "query-graph",
+        "otel-phoenix-tracing"
+      ],
+      "extract_path": ".llm-digested/bugs/004-synthesis-max-tokens-truncation.md"
+    },
+    "superpowers/plans/2026-07-07-node-base-class-refactor.md": {
+      "hash": "e795627b695dd549f6e22bda11dbc649b09e548f38fa94e8bfa241ee136e3738",
+      "primary_topic": "node-base-class-refactor",
+      "secondary_topics": [
+        "query-graph",
+        "document-ingestion-pipeline"
+      ],
+      "extract_path": ".llm-digested/superpowers/plans/2026-07-07-node-base-class-refactor.md"
+    },
+    "superpowers/plans/2026-07-13-synthesis-max-tokens-truncation-fix.md": {
+      "hash": "a8e72116511e43c27e53e1e85409f9bec00865ca44fa16e4332ed75ae9f3dce1",
+      "primary_topic": "synthesis-max-tokens-truncation-fix",
+      "secondary_topics": [
+        "known-issues",
+        "query-graph"
+      ],
+      "extract_path": ".llm-digested/superpowers/plans/2026-07-13-synthesis-max-tokens-truncation-fix.md"
+    },
+    "superpowers/specs/2026-07-07-node-base-class-refactor-design.md": {
+      "hash": "a9aa12b1a6c9c5efbb4c04e13aa37e955f6548745ec251253d468c420a49081b",
+      "primary_topic": "node-base-class-refactor",
+      "secondary_topics": [
+        "multi-agent-architecture",
+        "type-checking"
+      ],
+      "extract_path": ".llm-digested/superpowers/specs/2026-07-07-node-base-class-refactor-design.md"
+    },
+    "superpowers/specs/2026-07-13-synthesis-max-tokens-truncation-fix.md": {
+      "hash": "94e658e43ad721f723e3b8d62a4e5c3ceaf434a5f309f2944f5d19bc698fd689",
+      "primary_topic": "synthesis-max-tokens-truncation-fix",
+      "secondary_topics": [
+        "node-base-class-refactor"
+      ],
+      "extract_path": ".llm-digested/superpowers/specs/2026-07-13-synthesis-max-tokens-truncation-fix.md"
     }
   },
   "version": 1

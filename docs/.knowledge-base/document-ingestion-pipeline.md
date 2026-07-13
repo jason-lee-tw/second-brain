@@ -10,6 +10,7 @@ Files dropped in `temp/pending-digest-docs/` (or crawled from a URL) are hybrid-
 - **Tech stack**: Python, FastAPI, LangGraph, SQLModel, PostgreSQL + pgvector, Ollama (`qwen3-embedding:0.6b`), `claude-haiku-4-5` (contextual headers), `tavily-python`, `tiktoken` (`cl100k_base`), `httpx`.
 - **Two independent LangGraph graphs**: `IngestionState` (this pipeline) and the query-side `SecondBrainState` share the same database but never share runtime state — separating them keeps state schemas clean.
 - **Prerequisites**: `IngestedDocument`/`DocumentChunk` SQLModel models, SQLAlchemy `engine`, and FastAPI `app` already exist from infrastructure setup; `second_brain` package is installable from `src/`.
+- **Node architecture (2026-07-07 refactor)**: every ingestion node now extends `BaseNode`/`BaseAgentNode` and is exposed as a module-level singleton instance rather than a bare function — `ingestion_graph.py` calls `add_node(name, instance)` exactly as before (instances are callables), and agent-based nodes own their own `ClaudeAgent` internally so the graph file never constructs or names a model directly.
 
 ## Chunking Strategy
 
@@ -31,11 +32,12 @@ Files dropped in `temp/pending-digest-docs/` (or crawled from a URL) are hybrid-
 - **Storage**: each `DocumentChunk` is written with a shared `doc_id` (uuid4) across all chunks of a document, storing `heading_path` and `content_type` inside the chunk's JSONB `metadata` column (Python attribute `chunk_metadata`). After all chunks are added, an `IngestedDocument` row is committed with `status="processed"`.
 - **Retry/failure**: on exception, `retry_count` increments; if the new count is `< MAX_RETRIES` (3) the file re-enters `retry_queue` (non-terminal); once it reaches 3, the file moves `pending-digest-docs/` → `failed/` (terminal) and is recorded in `state["failed"]` instead of `retry_queue`.
 - **Crash-safety**: `in_progress` holds at most one file at a time, so an in-flight file's state survives a crash and can be resumed/retried rather than silently lost.
+- **Header generation, post-refactor (2026-07-07)**: `_generate_contextual_header` moved off the raw `anthropic.AsyncAnthropic` SDK client onto `ClaudeAgent`/`ChatAnthropic` (cached as `self._model` on `IngestionAgentNode`), using the dated model snapshot `CLAUDE_MODEL_NAME.HAIKU = "claude-haiku-4-5-20251001"` instead of the undated rolling alias `"claude-haiku-4-5"`, for reproducibility. Chunk processing (`_process_one_chunk`) runs concurrently, bounded by `_CHUNK_SEMAPHORE` (`_CHUNK_CONCURRENCY = 10`).
 
 ## Graph and API Shape
 
 - `IngestionState` TypedDict fields: `files` (original queue), `in_progress` (0 or 1 item), `processed`, `retry_queue` (list of `FailedFile`, `retry_count < 3`), `failed` (list of `FailedFile`, `retry_count >= 3`). `FailedFile`: `filename`, `error`, `retry_count`.
-- Graph nodes: `pick_file` (moves next filename — prioritizing `files[]` over `retry_queue` — into `in_progress`) → `ingest` (runs the ingestion agent) → conditional edge back to `pick_file` while `files` or `retry_queue` is non-empty, else `END`.
+- Graph nodes: `pick_file` (extracted into its own module `nodes/pick_file.py` as `PickFileNode`, a sync `BaseNode` subclass, singleton `pick_file_node`; moves next filename — prioritizing `files[]` over `retry_queue` — into `in_progress`, without removing it from `retry_queue` itself — that stays `IngestionAgentNode`'s job, to preserve retry metadata) → `ingest` (now `IngestionAgentNode`, an async `BaseAgentNode` subclass on `ClaudeAgent(CLAUDE_MODEL_NAME.HAIKU)`, singleton `ingestion_agent_node`) → conditional edge back to `pick_file` while `files` or `retry_queue` is non-empty, else `END`.
 - `POST /ingest/file`: globs `*.md` in `temp/pending-digest-docs/`; empty directory returns `IngestFileResponse(numberOfFilePassed=0, failedFiles=[])` immediately without invoking the graph; otherwise runs the graph and maps `numberOfFilePassed=len(final_state["processed"])`, `failedFiles=[f["filename"] for f in final_state["failed"]]`.
 - `POST /ingest/url`: sequentially calls `crawl_and_save(url)` per URL (via Tavily, `client.extract(urls=[url])`, deterministic slug filename from the URL, not random), folds resulting filenames into the same graph invocation and response mapping.
 - Response schema is intentionally camelCase (`numberOfFilePassed`, `failedFiles`), not snake_case.
@@ -45,11 +47,18 @@ Files dropped in `temp/pending-digest-docs/` (or crawled from a URL) are hybrid-
 
 - The `metadata` JSONB column populated on each `DocumentChunk` during ingestion (holding `heading_path` and `content_type`) is read back during query-time RAG retrieval. `asyncpg` does not auto-decode `jsonb` columns by default, which previously caused a `ValueError` when reading this ingestion-written metadata back out. The fix registers a JSONB type codec (`conn.set_type_codec("jsonb", ...)`) alongside the pgvector codec on every pooled connection — a retrieval-pool concern, not a change to the ingestion write path itself.
 
+## Node Base-Class Refactor (2026-07-07)
+
+- `pick_file` was extracted out of `ingestion_graph.py` into its own module (`nodes/pick_file.py`, `PickFileNode`) as part of a repo-wide conversion of every LangGraph node to a `BaseNode`/`BaseAgentNode` subclass; `ingestion_agent.py`'s bare function became `IngestionAgentNode`, an async `BaseAgentNode` subclass. Both are exposed as the same module-level singleton names (`pick_file_node`, `ingestion_agent_node`) that existing call sites already used, so `ingestion_graph.py` needed no import changes beyond sourcing `pick_file_node` from the new module.
+- This was framed as a **behavior-preserving structural refactor** with one deliberate exception scoped to ingestion: `ingestion_agent`'s contextual-header generation moved from the raw `anthropic.AsyncAnthropic` SDK client to `ClaudeAgent`/`ChatAnthropic` — the only piece of the whole refactor verified with a real test-first red/green cycle rather than a structural-move-only cycle.
+- Dead-code removal bundled into the same change: the unused `settings.ingestion_model` config field, and `ingestion_agent.shutdown()` plus its two call sites in `main.py`'s lifespan teardown (along with the now-unused `from second_brain.nodes import ingestion_agent` import).
+
 ## Sources
 
 - [Document Ingestion Pipeline — Implementation Plan] — `docs/superpowers/plans/2026-06-16-ticket-3-ingestion.md`
 - [Workflow Design — Data Ingestion Workflow] — `docs/business/004-workflow-design.md`
 - [Fix asyncpg JSONB Codec Registration Implementation Plan] — `docs/superpowers/plans/2026-06-25-fix-asyncpg-jsonb-codec.md`
+- [Node Base-Class Refactor Implementation Plan] — `docs/superpowers/plans/2026-07-07-node-base-class-refactor.md`
 
 ## Related Topics
 
@@ -63,3 +72,4 @@ Files dropped in `temp/pending-digest-docs/` (or crawled from a URL) are hybrid-
 - [[implementation-plan]]
 - [[second-brain-requirements]]
 - [[type-checking]]
+- [[node-base-class-refactor]]

@@ -14,6 +14,7 @@ OpenTelemetry instruments the FastAPI backend and exports traces to Arize Phoeni
 - **FastAPI instrumentation caveat (from tests)**: never call `FastAPIInstrumentor().uninstrument()` in teardown — it strips instrumentation globally from every app in the process, including the real `main.app`, breaking other tests in the same session.
 - **Verification pattern**: `docker compose up -d`, `curl -s http://localhost:8000/health` → `{"status": "ok"}`, then open the Phoenix UI at `http://localhost:6006`, navigate to Projects → `second-brain`, and confirm a root span named `GET /health` appears with duration/status in the waterfall.
 - **Later refinement — LangChain/LangGraph spans**: this initial build only wired HTTP-level spans explicitly; LangChain/LangGraph internals (`LLM`/`CHAIN`/`TOOL` span kinds) needed a separate fix — enabling `auto_instrument=True` on `phoenix.otel.register()` plus the `openinference-instrumentation-langchain` package. See [[langchain-otel-instrumentation]] for that fix rather than duplicating it here.
+- **Traces as debugging evidence for the synthesis `max_tokens` truncation bug**: Phoenix span `0714a461...` for a `synthesis` node call showed `"stop_reason": "max_tokens"` with `"usage": {"input_tokens": 1860, "output_tokens": 1024}`, and the parsed tool-call arguments contained only `final_answer` and `confidence` — `reasoning`, the last field on `_SynthesisOutput`, was missing because generation was cut off before the model reached it. This trace was the evidence that diagnosed the root cause: `SynthesisNode` never overrode `max_tokens`, so `ChatAnthropic` fell back to its library default of 1024 tokens, and `PydanticToolsParser` raised a `ValidationError` when the truncated tool call was missing a required field, 500ing `POST /query`. See [[synthesis-max-tokens-truncation-fix]] for the full five-why root cause and fix, and [[known-issues]] for how this bug is tracked alongside others.
 
 ## Open Questions
 
@@ -24,6 +25,9 @@ OpenTelemetry instruments the FastAPI backend and exports traces to Arize Phoeni
 - OpenTelemetry + Arize Phoenix Tracing Implementation Plan — `docs/superpowers/plans/2026-06-16-ticket-2-otel-phoenix.md`
 - Tech Stack — `docs/codebase/001-tech-stack.md`
 - System Architecture — `docs/codebase/003-system-architecture.md`
+- Fix Missing LangChain OTEL Spans Implementation Plan — `docs/superpowers/plans/2026-06-25-langchain-otel-instrumentation.md`
+- Spec: Fix Missing LangChain OTEL Spans in Phoenix — `docs/superpowers/specs/2026-06-25-langchain-otel-instrumentation.md`
+- Bug: POST /query — 500 when synthesis LLM output is truncated by max_tokens — `docs/bugs/004-synthesis-max-tokens-truncation.md`
 
 ## Related Topics
 
@@ -35,3 +39,5 @@ OpenTelemetry instruments the FastAPI backend and exports traces to Arize Phoeni
 - [[implementation-plan]]
 - [[second-brain-architecture]]
 - [[second-brain-requirements]]
+- [[synthesis-max-tokens-truncation-fix]]
+- [[known-issues]]

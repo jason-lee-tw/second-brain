@@ -9,10 +9,13 @@ The capstone requires a system of specialized agents that collaborate via LangGr
 - Must show clear evidence via evaluation metrics of concrete benefits from multi-agent architecture (alongside RAG and/or memory systems) versus simpler approaches — the architecture is not just built, it must be justified by measurement.
 - Agent orchestration/coordination is done via LangGraph (in-scope requirement).
 - Multi-agent orchestration pattern itself (which specific pattern to use) is optional/recommended, not mandated — any multi-agent pattern is acceptable.
+- Architectural decision: each agent-backed LangGraph node owns its own LLM model internally rather than the graph constructing or naming a model. Nodes extend `BaseNode` (plain nodes) or `BaseAgentNode` (agent-backed nodes, which wrap a `BaseAgent`/`ClaudeAgent`); the model is constructed inside the node's own `__init__`. Graphs (`graphs/query_graph.py`, `graphs/ingestion_graph.py`) only register nodes — they never construct or name a model.
+- This keeps agent identity (which LLM a specialized agent uses) encapsulated per-node instead of centralized in the graph definition, reinforcing the "specialized agents" requirement above: each required role (e.g. orchestrator, memory, synthesis) is its own node class with its own model choice. See [[node-base-class-refactor]] for the full per-node conversion, including the base-class shapes and the complete file-by-file breakdown.
 
 ## Sources
 
 - "Second Brain" Capstone Assignment — `docs/business/001-raw-requirement.md`
+- Node Base-Class Refactor — Design — `docs/superpowers/specs/2026-07-07-node-base-class-refactor-design.md`
 
 ## Related Topics
 
@@ -25,3 +28,4 @@ The capstone requires a system of specialized agents that collaborate via LangGr
 - [[git-worktrees]]
 - [[query-workflow]]
 - [[second-brain-requirements]]
+- [[node-base-class-refactor]]
