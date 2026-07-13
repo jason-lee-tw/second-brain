@@ -1,9 +1,0 @@
-{
-  "task_id": "task-7-create-nodes-pick_file-py-and-update-ingestion_graph-py",
-  "plan": "docs/superpowers/plans/2026-07-07-node-base-class-refactor.md",
-  "spec": "docs/superpowers/specs/2026-07-07-node-base-class-refactor-design.md",
-  "status": "completed",
-  "attempt": 1,
-  "worktree": ".worktrees/task-7-create-nodes-pick_file-py-and-update-ingestion_graph-py",
-  "completed_steps": ["tdd-loop-complete"]
-}

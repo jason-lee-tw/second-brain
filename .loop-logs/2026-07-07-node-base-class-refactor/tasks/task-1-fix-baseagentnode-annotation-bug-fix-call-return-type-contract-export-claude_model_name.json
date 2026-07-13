@@ -1,9 +1,0 @@
-{
-  "task_id": "task-1-fix-baseagentnode-annotation-bug-fix-call-return-type-contract-export-claude_model_name",
-  "plan": "docs/superpowers/plans/2026-07-07-node-base-class-refactor.md",
-  "spec": "docs/superpowers/specs/2026-07-07-node-base-class-refactor-design.md",
-  "status": "completed",
-  "attempt": 1,
-  "worktree": ".worktrees/task-1-fix-baseagentnode-annotation-bug-fix-call-return-type-contract-export-claude_model_name",
-  "completed_steps": ["tdd-loop-complete"]
-}
