@@ -21,7 +21,7 @@ async def test_routes_to_rag_for_personal_knowledge_query():
     messages=[HumanMessage(content="What are my notes on machine learning?")],
     retrieved_memory=[],
   )
-  with patch("second_brain.nodes.orchestrator._structured_llm") as mock_llm:
+  with patch("second_brain.nodes.orchestrator.route_query._structured_llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_mock_routing("rag"))
     result = await route_query(state)
   assert result["routing_decision"] == "rag"
@@ -33,7 +33,7 @@ async def test_routes_to_web_for_current_events():
     messages=[HumanMessage(content="What happened in the tech industry this week?")],
     retrieved_memory=[],
   )
-  with patch("second_brain.nodes.orchestrator._structured_llm") as mock_llm:
+  with patch("second_brain.nodes.orchestrator.route_query._structured_llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_mock_routing("web"))
     result = await route_query(state)
   assert result["routing_decision"] == "web"
@@ -47,7 +47,7 @@ async def test_routes_to_both_for_mixed_query():
     ],
     retrieved_memory=[],
   )
-  with patch("second_brain.nodes.orchestrator._structured_llm") as mock_llm:
+  with patch("second_brain.nodes.orchestrator.route_query._structured_llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_mock_routing("both"))
     result = await route_query(state)
   assert result["routing_decision"] == "both"
@@ -59,7 +59,7 @@ async def test_routes_to_neither_for_conversational_query():
     messages=[HumanMessage(content="Thanks, that helps!")],
     retrieved_memory=[],
   )
-  with patch("second_brain.nodes.orchestrator._structured_llm") as mock_llm:
+  with patch("second_brain.nodes.orchestrator.route_query._structured_llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_mock_routing("neither"))
     result = await route_query(state)
   assert result["routing_decision"] == "neither"
@@ -85,7 +85,7 @@ async def test_includes_memory_context_in_prompt():
     captured_prompts.append(prompt)
     return _mock_routing("rag")
 
-  with patch("second_brain.nodes.orchestrator._structured_llm") as mock_llm:
+  with patch("second_brain.nodes.orchestrator.route_query._structured_llm") as mock_llm:
     mock_llm.ainvoke = capture_invoke
     await route_query(state)
 

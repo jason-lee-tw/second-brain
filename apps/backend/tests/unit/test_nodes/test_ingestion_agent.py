@@ -27,6 +27,22 @@ def test_chunk_semaphore_is_bounded():
   assert _CHUNK_SEMAPHORE._value == _CHUNK_CONCURRENCY
 
 
+def test_ingestion_agent_node_caps_max_tokens_at_150():
+  """IngestionAgentNode must cap header generation at 150 tokens.
+
+  Regression guard: this cap existed on the raw anthropic.AsyncAnthropic client
+  before the node base-class refactor and must be preserved via ClaudeAgent's
+  max_tokens kwarg, otherwise ChatAnthropic silently falls back to its 1024
+  default for a call that only needs a single short header per chunk.
+  """
+  with patch("second_brain.nodes.ingestion_agent.ClaudeAgent") as mock_claude_agent:
+    from second_brain.nodes.ingestion_agent import CLAUDE_MODEL_NAME, IngestionAgentNode
+
+    IngestionAgentNode()
+
+  mock_claude_agent.assert_called_once_with(CLAUDE_MODEL_NAME.HAIKU, max_tokens=150)
+
+
 @pytest.mark.asyncio
 async def test_successful_ingest_moves_file_to_processed(tmp_path):
   """On successful ingest, filename moves from in_progress to processed."""
@@ -47,7 +63,7 @@ async def test_successful_ingest_moves_file_to_processed(tmp_path):
       AsyncMock(return_value=fake_embedding),
     ),
     patch(
-      "second_brain.nodes.ingestion_agent._generate_contextual_header",
+      "second_brain.nodes.ingestion_agent.ingestion_agent_node._generate_contextual_header",
       AsyncMock(return_value=fake_header),
     ),
     patch("second_brain.nodes.ingestion_agent.Session") as mock_session_cls,
@@ -116,7 +132,7 @@ async def test_first_failure_goes_to_retry_queue(tmp_path):
       AsyncMock(side_effect=RuntimeError("Ollama down")),
     ),
     patch(
-      "second_brain.nodes.ingestion_agent._generate_contextual_header",
+      "second_brain.nodes.ingestion_agent.ingestion_agent_node._generate_contextual_header",
       AsyncMock(return_value="header"),
     ),
     patch("second_brain.nodes.ingestion_agent.Session") as mock_session_cls,
@@ -140,23 +156,26 @@ async def test_first_failure_goes_to_retry_queue(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_generate_contextual_header_raises_when_no_text_block():
-  """_generate_contextual_header raises ValueError when response has no TextBlock."""
+async def test_generate_contextual_header_strips_whitespace():
+  """_generate_contextual_header strips leading/trailing whitespace from response."""
+  from second_brain.nodes.ingestion_agent import ingestion_agent_node
+
   mock_response = MagicMock()
-  mock_response.content = []  # no TextBlock
+  mock_response.content = (
+    "  This chunk is from doc.md, section Intro, covering testing.  "
+  )
 
   with patch(
-    "second_brain.nodes.ingestion_agent._anthropic.messages.create",
-    new=AsyncMock(return_value=mock_response),
-  ):
-    from second_brain.nodes.ingestion_agent import _generate_contextual_header
+    "second_brain.nodes.ingestion_agent.ingestion_agent_node._model"
+  ) as mock_model:
+    mock_model.ainvoke = AsyncMock(return_value=mock_response)
+    header = await ingestion_agent_node._generate_contextual_header(
+      filename="doc.md",
+      heading_path="Intro",
+      chunk_content="Some content here.",
+    )
 
-    with pytest.raises(ValueError, match="No TextBlock in Anthropic response"):
-      await _generate_contextual_header(
-        filename="doc.md",
-        heading_path="Intro",
-        chunk_content="Some content here.",
-      )
+  assert header == "This chunk is from doc.md, section Intro, covering testing."
 
 
 @pytest.mark.asyncio
@@ -176,7 +195,7 @@ async def test_third_failure_moves_to_failed_and_moves_file(tmp_path):
       AsyncMock(side_effect=RuntimeError("permanent error")),
     ),
     patch(
-      "second_brain.nodes.ingestion_agent._generate_contextual_header",
+      "second_brain.nodes.ingestion_agent.ingestion_agent_node._generate_contextual_header",
       AsyncMock(return_value="header"),
     ),
     patch("second_brain.nodes.ingestion_agent.Session") as mock_session_cls,

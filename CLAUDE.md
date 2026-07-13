@@ -1,4 +1,4 @@
-# investment-report-app
+# Personal Second Brain
 
 ## Project
 

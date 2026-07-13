@@ -48,7 +48,7 @@ async def test_case1_extracts_user_facts():
     messages=[HumanMessage(content="I work as a software engineer in Berlin.")]
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(
       return_value=_output(
         MemoryCase.FACT_EXTRACTION,
@@ -77,7 +77,7 @@ async def test_case1_no_facts_in_generic_message():
 
   state = _make_state(messages=[HumanMessage(content="What is the tallest mountain?")])
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_output(MemoryCase.FACT_EXTRACTION))
     result = await memory_agent_node(state)
 
@@ -101,7 +101,7 @@ async def test_case2_extracts_correction():
     awaiting_correction=True,
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(
       return_value=_output(
         MemoryCase.CORRECTION,
@@ -138,7 +138,7 @@ async def test_case2_unrelated_query_resets_awaiting_correction():
     awaiting_correction=True,
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_output(MemoryCase.FACT_EXTRACTION))
     result = await memory_agent_node(state)
 
@@ -174,7 +174,7 @@ async def test_case3_resolves_conflict_and_resets_flags():
     ],
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(
       return_value=_output(
         MemoryCase.CONFLICT_RESOLUTION,
@@ -221,9 +221,28 @@ async def test_case3_keep_existing_returns_empty_fact_updates():
     ],
   )
 
-  with patch("second_brain.nodes.memory_agent._llm") as mock_llm:
+  with patch("second_brain.nodes.memory_agent.memory_agent_node._llm") as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=_output(MemoryCase.CONFLICT_RESOLUTION))
     result = await memory_agent_node(state)
 
   assert result["awaiting_conflict_clarification"] is False
   assert result["fact_updates"] == []
+
+
+# ── max_tokens configuration ──────────────────────────────────────────────────
+
+
+@patch("second_brain.nodes.base_node.agents.claude_agent.ChatAnthropic")
+def test_memory_agent_node_sets_max_tokens_4096(mock_chat_anthropic):
+  """MemoryAgentNode must raise max_tokens above the 1024 library default.
+
+  Same latent defect shape as docs/bugs/004-synthesis-max-tokens-truncation.md
+  (required MemoryAgentOutput.case field, no max_tokens override) — fixed
+  proactively even though it hasn't been observed to truncate yet.
+  """
+  from second_brain.nodes.memory_agent import MemoryAgentNode
+
+  MemoryAgentNode()
+
+  _, kwargs = mock_chat_anthropic.call_args
+  assert kwargs["max_tokens"] == 4096

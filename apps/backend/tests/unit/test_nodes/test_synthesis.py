@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import ValidationError
 
 from tests.unit.conftest import make_state
 
@@ -65,7 +66,9 @@ async def test_synthesize_answer_raises_on_list_content_query():
     routing_decision="rag",
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -104,7 +107,9 @@ async def test_synthesize_answer_returns_answer_and_confidence():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -132,7 +137,9 @@ async def test_synthesize_answer_is_uncertain_when_confidence_below_threshold():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -156,7 +163,9 @@ async def test_synthesize_answer_applies_confidence_floor_for_neither_routing():
     routing_decision="neither",
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -182,7 +191,9 @@ async def test_synthesize_answer_floor_does_not_lower_confidence_above_floor():
     routing_decision="neither",
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -228,7 +239,9 @@ async def test_synthesize_answer_trims_messages_to_last_10():
     captured_prompt.append(prompt)
     return mock_output
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(side_effect=capture_invoke)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -267,7 +280,9 @@ async def test_synthesize_answer_context_used_rag_only():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -290,7 +305,9 @@ async def test_synthesize_answer_context_used_web_only():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -318,7 +335,9 @@ async def test_synthesize_answer_context_used_memory_only():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -355,7 +374,9 @@ async def test_synthesize_answer_context_used_combines_all_three_in_order():
     ],
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
@@ -379,10 +400,66 @@ async def test_synthesize_answer_context_used_empty_when_no_context():
     routing_decision="neither",
   )
 
-  with patch("second_brain.nodes.synthesis._structured_llm") as mock_llm:
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
     mock_llm.ainvoke = AsyncMock(return_value=mock_output)
     from second_brain.nodes.synthesis import synthesize_answer
 
     result = await synthesize_answer(state)
 
   assert result["context_used"] == []
+
+
+@patch("second_brain.nodes.base_node.agents.claude_agent.ChatAnthropic")
+def test_synthesis_node_sets_max_tokens_4096(mock_chat_anthropic):
+  """SynthesisNode must raise max_tokens above the 1024 library default.
+
+  Regression guard for docs/bugs/004-synthesis-max-tokens-truncation.md —
+  1024 truncated a verbose completion before the required `reasoning` field
+  was written, causing an uncaught ValidationError -> 500.
+  """
+  from second_brain.nodes.synthesis import SynthesisNode
+
+  SynthesisNode()
+
+  _, kwargs = mock_chat_anthropic.call_args
+  assert kwargs["max_tokens"] == 4096
+
+
+@pytest.mark.asyncio
+async def test_synthesize_answer_retries_once_when_structured_output_is_truncated():
+  """A ValidationError from a truncated completion (max_tokens) triggers one retry.
+
+  Regression guard for docs/bugs/004-synthesis-max-tokens-truncation.md.
+  """
+  from second_brain.nodes.synthesis import _SynthesisOutput
+
+  try:
+    _SynthesisOutput.model_validate({"final_answer": "partial", "confidence": 0.75})
+  except ValidationError as exc:
+    truncated_error = exc
+  else:
+    raise AssertionError("expected ValidationError")
+
+  mock_output = _make_synthesis_output(
+    final_answer="Complete answer.", confidence=0.75, reasoning="Full reasoning."
+  )
+  state = make_state(
+    messages=[HumanMessage(content="query")],
+    routing_decision="rag",
+    rag_results=[
+      {"content": "context", "score": 0.9, "chunk_index": 0, "metadata": {}}
+    ],
+  )
+
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
+    mock_llm.ainvoke = AsyncMock(side_effect=[truncated_error, mock_output])
+    from second_brain.nodes.synthesis import synthesize_answer
+
+    result = await synthesize_answer(state)
+
+  assert result["final_answer"] == "Complete answer."
+  assert mock_llm.ainvoke.call_count == 2

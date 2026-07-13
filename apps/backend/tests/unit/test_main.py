@@ -23,35 +23,21 @@ async def test_lifespan_closes_httpx_client():
 
 
 @pytest.mark.asyncio
-async def test_lifespan_closes_anthropic_client():
-  """Lifespan must call close() on the anthropic AsyncAnthropic after yield."""
-  mock_anthropic = AsyncMock()
-  mock_provider = MagicMock(spec=TracerProvider)
-  with (
-    patch("second_brain.main.setup_tracing", return_value=mock_provider),
-    patch("second_brain.nodes.ingestion_agent._anthropic", mock_anthropic),
-  ):
-    async with lifespan(app):
-      pass
-  mock_anthropic.close.assert_called_once()
-
-
-@pytest.mark.asyncio
 async def test_lifespan_closes_both_clients_even_if_one_raises():
-  """If one close raises, the other must still be called."""
+  """If one teardown raises, the other must still run."""
   mock_client = AsyncMock()
   mock_client.aclose.side_effect = RuntimeError("httpx close failed")
-  mock_anthropic = AsyncMock()
+  mock_shutdown_query_graph = AsyncMock()
   mock_provider = MagicMock(spec=TracerProvider)
 
   with (
     patch("second_brain.main.setup_tracing", return_value=mock_provider),
     patch("second_brain.services.embeddings._client", mock_client),
-    patch("second_brain.nodes.ingestion_agent._anthropic", mock_anthropic),
+    patch("second_brain.main.shutdown_query_graph", mock_shutdown_query_graph),
   ):
     # Lifespan should not propagate teardown exceptions
     async with lifespan(app):
       pass
 
   mock_client.aclose.assert_called_once()
-  mock_anthropic.close.assert_called_once()
+  mock_shutdown_query_graph.assert_called_once()

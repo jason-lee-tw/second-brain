@@ -68,7 +68,7 @@ async def test_full_ingest_file_success(tmp_dirs):
     patch(f"{node}.FAILED_DIR", tmp_dirs["failed"]),
     patch(f"{node}.embed_text", AsyncMock(return_value=FAKE_EMBEDDING)),
     patch(
-      f"{node}._generate_contextual_header",
+      f"{node}.ingestion_agent_node._generate_contextual_header",
       AsyncMock(return_value=FAKE_HEADER),
     ),
   ):
@@ -127,7 +127,7 @@ async def test_duplicate_file_is_skipped_on_reingest(tmp_dirs):
     patch(f"{node}.FAILED_DIR", tmp_dirs["failed"]),
     patch(f"{node}.embed_text", AsyncMock(return_value=FAKE_EMBEDDING)),
     patch(
-      f"{node}._generate_contextual_header",
+      f"{node}.ingestion_agent_node._generate_contextual_header",
       AsyncMock(return_value=FAKE_HEADER),
     ),
   ):
@@ -176,7 +176,7 @@ async def test_api_endpoint_ingest_file_returns_correct_response(tmp_dirs):
     patch("second_brain.api.routers.ingest.PENDING_DOCS_DIR", tmp_dirs["pending"]),
     patch(f"{node}.embed_text", AsyncMock(return_value=FAKE_EMBEDDING)),
     patch(
-      f"{node}._generate_contextual_header",
+      f"{node}.ingestion_agent_node._generate_contextual_header",
       AsyncMock(return_value=FAKE_HEADER),
     ),
   ):
