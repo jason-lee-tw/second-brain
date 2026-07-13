@@ -74,4 +74,13 @@ Confirmed empirically — identical prompt/schema/`max_tokens=1024`, model swapp
 
 ## Fix
 
-Not yet implemented — see spec: `docs/superpowers/specs/2026-07-13-synthesis-max-tokens-truncation-fix.md`.
+Implemented per `docs/superpowers/specs/2026-07-13-synthesis-max-tokens-truncation-fix.md`
+and `docs/superpowers/plans/2026-07-13-synthesis-max-tokens-truncation-fix.md`:
+
+- `SynthesisNode` and `MemoryAgentNode` now construct their `ClaudeAgent` with
+  `max_tokens=4096` (was: unset, defaulting to `ChatAnthropic`'s library default of 1024).
+- `BaseAgentNode._ainvoke_structured` retries a structured-output `.ainvoke()` call
+  exactly once on `pydantic.ValidationError`, absorbing residual truncation without
+  masking a genuine second failure.
+
+Verified: replaying the original repro curl against a fresh backend now returns 200.
