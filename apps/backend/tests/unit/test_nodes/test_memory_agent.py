@@ -227,3 +227,22 @@ async def test_case3_keep_existing_returns_empty_fact_updates():
 
   assert result["awaiting_conflict_clarification"] is False
   assert result["fact_updates"] == []
+
+
+# ── max_tokens configuration ──────────────────────────────────────────────────
+
+
+@patch("second_brain.nodes.base_node.agents.claude_agent.ChatAnthropic")
+def test_memory_agent_node_sets_max_tokens_4096(mock_chat_anthropic):
+  """MemoryAgentNode must raise max_tokens above the 1024 library default.
+
+  Same latent defect shape as docs/bugs/004-synthesis-max-tokens-truncation.md
+  (required MemoryAgentOutput.case field, no max_tokens override) — fixed
+  proactively even though it hasn't been observed to truncate yet.
+  """
+  from second_brain.nodes.memory_agent import MemoryAgentNode
+
+  MemoryAgentNode()
+
+  _, kwargs = mock_chat_anthropic.call_args
+  assert kwargs["max_tokens"] == 4096

@@ -34,7 +34,7 @@ class MemoryAgentNode(BaseAgentNode[SecondBrainState, dict[str, object]]):
   """Three-case memory classification via LangChain-Anthropic structured output."""
 
   def __init__(self):
-    super().__init__(ClaudeAgent(CLAUDE_MODEL_NAME.HAIKU))
+    super().__init__(ClaudeAgent(CLAUDE_MODEL_NAME.HAIKU, max_tokens=4096))
     self._llm = self._agent.get_model().with_structured_output(MemoryAgentOutput)
 
   @override
@@ -96,7 +96,9 @@ class MemoryAgentNode(BaseAgentNode[SecondBrainState, dict[str, object]]):
         "Set conflicts_with=[] for every fact."
       )
 
-    output: MemoryAgentOutput = await self._llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
+    output: MemoryAgentOutput = await self._ainvoke_structured(  # pyright: ignore[reportAssignmentType]
+      self._llm, prompt
+    )
 
     # F1 fix: in Case 3 the LLM may omit conflicts_with UUIDs (unreliable).
     # The pending_facts stored in state["fact_updates"] from the previous turn
