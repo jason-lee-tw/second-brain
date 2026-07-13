@@ -1,0 +1,354 @@
+{
+  "entries": {
+    "bugs/000-index.md": {
+      "extract_path": ".llm-digested/bugs/000-index.md",
+      "hash": "a5afbbc5b69f2c1b9507baca1cf4fb558239fec16c4359c8394e536c3c5cce4f",
+      "primary_topic": "known-issues",
+      "secondary_topics": [
+        "postgres-connection-pooling",
+        "integration-testing"
+      ]
+    },
+    "bugs/001-fix-typecheck-error.md": {
+      "extract_path": ".llm-digested/bugs/001-fix-typecheck-error.md",
+      "hash": "63924dbc7ca9f14cf78d714fef45de6148677501b24c389890f758d101bf4257",
+      "primary_topic": "type-checking",
+      "secondary_topics": [
+        "query-graph"
+      ]
+    },
+    "bugs/002-query-graph-autocommit.md": {
+      "extract_path": ".llm-digested/bugs/002-query-graph-autocommit.md",
+      "hash": "c3aaa11fc547e300f63ea854570f3576f4024ead33bf1a7a8edf42bf296a5111",
+      "primary_topic": "query-graph-autocommit-fix",
+      "secondary_topics": [
+        "postgres-connection-pooling"
+      ]
+    },
+    "bugs/003-integration-test-failures.md": {
+      "extract_path": ".llm-digested/bugs/003-integration-test-failures.md",
+      "hash": "82b74a4be00ad914bbc1781c2f8835ed3fe6010d43145cac5af5590b7a02a752",
+      "primary_topic": "integration-testing",
+      "secondary_topics": [
+        "postgres-connection-pooling",
+        "pgvector-embeddings"
+      ]
+    },
+    "business/000-index.md": {
+      "extract_path": ".llm-digested/business/000-index.md",
+      "hash": "c41a30f1593d383fa7d888fc8d32d1d481e6b01ed80da52602a9e0f3bc1780fc",
+      "primary_topic": "project-requirements",
+      "secondary_topics": [
+        "implementation-plan",
+        "query-workflow"
+      ]
+    },
+    "business/001-raw-requirement.md": {
+      "extract_path": ".llm-digested/business/001-raw-requirement.md",
+      "hash": "e73f2489f4b671fd05703f586ac16c8aee017afb7a3c0063386345030999212c",
+      "primary_topic": "capstone-requirements",
+      "secondary_topics": [
+        "tech-stack",
+        "multi-agent-architecture"
+      ]
+    },
+    "business/002-project-requirement-document.md": {
+      "extract_path": ".llm-digested/business/002-project-requirement-document.md",
+      "hash": "e9162f0ed0b9fb76f204ef2d51b06890cbda8aa2bf57a2e4a8c4f54dc420c2e4",
+      "primary_topic": "second-brain-requirements",
+      "secondary_topics": [
+        "query-graph",
+        "memory-system"
+      ]
+    },
+    "business/003-implementation.md": {
+      "extract_path": ".llm-digested/business/003-implementation.md",
+      "hash": "67360e37d14630a83c11859283220ca6c0a0d7819e1429a1a0d69b7a3818c329",
+      "primary_topic": "implementation-plan",
+      "secondary_topics": []
+    },
+    "business/004-workflow-design.md": {
+      "extract_path": ".llm-digested/business/004-workflow-design.md",
+      "hash": "68ceb9e0c40f7cc9c7c4e908e51fb7e7cd021b1b3a00c04449143d5e24aa8bad",
+      "primary_topic": "query-workflow",
+      "secondary_topics": [
+        "document-ingestion-pipeline",
+        "memory-system"
+      ]
+    },
+    "codebase/000-index.md": {
+      "extract_path": ".llm-digested/codebase/000-index.md",
+      "hash": "2b0f76273efdcc1da2b5c2520f2dcf48a23e791b009b6567ae19e1743bb12a04",
+      "primary_topic": "codebase-overview",
+      "secondary_topics": [
+        "system-architecture",
+        "database-schema"
+      ]
+    },
+    "codebase/001-tech-stack.md": {
+      "extract_path": ".llm-digested/codebase/001-tech-stack.md",
+      "hash": "8a2680135cc5cd5e675cf19f0a3f621e4f5f127084fa54192f1a0756e895cabb",
+      "primary_topic": "tech-stack",
+      "secondary_topics": [
+        "otel-phoenix-tracing",
+        "evaluation-harness"
+      ]
+    },
+    "codebase/002-repo-structure.md": {
+      "extract_path": ".llm-digested/codebase/002-repo-structure.md",
+      "hash": "cb65cbdef1d37502ade3e71635b3efb6374226c76da9efad6fcc321569a53ead",
+      "primary_topic": "repo-structure",
+      "secondary_topics": [
+        "system-architecture",
+        "dockerfile-consolidation"
+      ]
+    },
+    "codebase/003-system-architecture.md": {
+      "extract_path": ".llm-digested/codebase/003-system-architecture.md",
+      "hash": "aec665840581842418f6cc8277a04f9424f037b48d711d76bb785402caa61e39",
+      "primary_topic": "system-architecture",
+      "secondary_topics": [
+        "postgres-connection-pooling",
+        "otel-phoenix-tracing"
+      ]
+    },
+    "codebase/004-database.md": {
+      "extract_path": ".llm-digested/codebase/004-database.md",
+      "hash": "7d45e94d3b8d841d8b792717896491ea44e119b1faa33e44a8eade7d685b4e98",
+      "primary_topic": "database-access-patterns",
+      "secondary_topics": [
+        "database-schema"
+      ]
+    },
+    "grilling-sessions/2026-06-26-ticket-5-grilling-decisions.md": {
+      "extract_path": ".llm-digested/grilling-sessions/2026-06-26-ticket-5-grilling-decisions.md",
+      "hash": "e10167f3869549f149fc4e8ca778b9aff21056c7312c23716dd232bc119d090e",
+      "primary_topic": "memory-system",
+      "secondary_topics": [
+        "postgres-connection-pooling"
+      ]
+    },
+    "superpowers/plans/2026-06-16-ticket-1-infrastructure.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-16-ticket-1-infrastructure.md",
+      "hash": "622937cb810c048b2217025c4c855cce0d6ec0972c5e58a8297ede06464c02ba",
+      "primary_topic": "infrastructure-setup",
+      "secondary_topics": [
+        "database-schema",
+        "docker-compose"
+      ]
+    },
+    "superpowers/plans/2026-06-16-ticket-2-otel-phoenix.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-16-ticket-2-otel-phoenix.md",
+      "hash": "26777de294e8413b0c7032ec4f4a42d9f31df9bf150da56448642a8a06a1de98",
+      "primary_topic": "otel-phoenix-tracing",
+      "secondary_topics": [
+        "docker-compose"
+      ]
+    },
+    "superpowers/plans/2026-06-16-ticket-3-ingestion.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-16-ticket-3-ingestion.md",
+      "hash": "d536a08262113ea0a9499a5cf87ca104d812f5406483f9bb3d616243bf282406",
+      "primary_topic": "document-ingestion-pipeline",
+      "secondary_topics": [
+        "query-graph"
+      ]
+    },
+    "superpowers/plans/2026-06-16-ticket-4-query-graph.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-16-ticket-4-query-graph.md",
+      "hash": "62fa6e3bbb1ca6f672e2dfc01263206ea5d6f8596ffb3a94ee70d3cd3bb5f858",
+      "primary_topic": "query-graph",
+      "secondary_topics": []
+    },
+    "superpowers/plans/2026-06-16-ticket-5-memory.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-16-ticket-5-memory.md",
+      "hash": "f9d50c556aeea60711836f7025e231d65aafa1a350b79dec5a5b9dd326b6b5b8",
+      "primary_topic": "memory-system",
+      "secondary_topics": [
+        "postgres-connection-pooling",
+        "query-graph"
+      ]
+    },
+    "superpowers/plans/2026-06-16-ticket-6-evaluation.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-16-ticket-6-evaluation.md",
+      "hash": "4ef98637ddd4721929a84b9c0e6b732f175d0ff2b9a417d32428236d61751e4c",
+      "primary_topic": "evaluation-harness",
+      "secondary_topics": [
+        "pgvector-embeddings"
+      ]
+    },
+    "superpowers/plans/2026-06-17-db-migration-container.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-17-db-migration-container.md",
+      "hash": "55dd63cd59be5266e6494c76df2bc044ccc5c0373fc6dbd66347bee15f5dfc02",
+      "primary_topic": "database-migration-container",
+      "secondary_topics": [
+        "docker-compose"
+      ]
+    },
+    "superpowers/plans/2026-06-17-dockerfile-consolidation.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-17-dockerfile-consolidation.md",
+      "hash": "e0712d36f5c008217b0d456ddfa6768319237f215cd617e2a7241c12a3b6d3f2",
+      "primary_topic": "dockerfile-consolidation",
+      "secondary_topics": [
+        "repo-structure"
+      ]
+    },
+    "superpowers/plans/2026-06-17-workspace-restructure.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-17-workspace-restructure.md",
+      "hash": "f8b79ac8f68f9f6b506170450f35530bb5d373985adc0adc435652297359c969",
+      "primary_topic": "uv-workspace-restructure",
+      "secondary_topics": [
+        "repo-structure"
+      ]
+    },
+    "superpowers/plans/2026-06-19-autonomous-feature-development-loop.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-19-autonomous-feature-development-loop.md",
+      "hash": "9a7fa76ce5d772d48b2d86330c4887faadd2f42a92cdbd0845a42c4c7692e047",
+      "primary_topic": "autonomous-feature-development-loop",
+      "secondary_topics": [
+        "git-worktrees"
+      ]
+    },
+    "superpowers/plans/2026-06-24-fix-query-graph-autocommit.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-24-fix-query-graph-autocommit.md",
+      "hash": "d37dac198c32b67f4d891283920751cb0aa320795784f573e8155e85387e356d",
+      "primary_topic": "query-graph-autocommit-fix",
+      "secondary_topics": []
+    },
+    "superpowers/plans/2026-06-24-fix-typecheck-errors.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-24-fix-typecheck-errors.md",
+      "hash": "f3c3058db5df2005f0761491d8b04deaea42d999f97c5112ca5b3db9c961a342",
+      "primary_topic": "type-checking",
+      "secondary_topics": [
+        "query-graph"
+      ]
+    },
+    "superpowers/plans/2026-06-25-fix-asyncpg-jsonb-codec.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-25-fix-asyncpg-jsonb-codec.md",
+      "hash": "c89d52cc63a1f80144657b2b0014e770284d0731ade42a260bb2e2186f5428ff",
+      "primary_topic": "asyncpg-jsonb-codec",
+      "secondary_topics": [
+        "postgres-connection-pooling",
+        "document-ingestion-pipeline"
+      ]
+    },
+    "superpowers/plans/2026-06-25-langchain-otel-instrumentation.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-06-25-langchain-otel-instrumentation.md",
+      "hash": "432a3f187d1cfc513c0eee00ed601e82e567be3d7a8b68d17850a1dd59d8f02b",
+      "primary_topic": "langchain-otel-instrumentation",
+      "secondary_topics": [
+        "otel-phoenix-tracing",
+        "dependency-management"
+      ]
+    },
+    "superpowers/plans/2026-07-01-eval-ragas-collections-migration.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-07-01-eval-ragas-collections-migration.md",
+      "hash": "edad3c3fbcdbc993d3f4a62f32d4bf2fd1ff8a475617d51e7827ff59b8d2eebb",
+      "primary_topic": "ragas-collections-migration",
+      "secondary_topics": [
+        "dependency-management"
+      ]
+    },
+    "superpowers/plans/2026-07-03-integration-test-fixes.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-07-03-integration-test-fixes.md",
+      "hash": "60293b9843df0150b0b52e3b41341516eb673ce4928da031da2b4a0d84a40a9e",
+      "primary_topic": "integration-testing",
+      "secondary_topics": [
+        "memory-system",
+        "database-schema"
+      ]
+    },
+    "superpowers/plans/2026-07-03-python-3-13-upgrade.md": {
+      "extract_path": ".llm-digested/superpowers/plans/2026-07-03-python-3-13-upgrade.md",
+      "hash": "b926ca23c58c604a93f7f69df72a7689a82337056a56e1e3d1ed388dc0fea1cc",
+      "primary_topic": "python-3-13-upgrade",
+      "secondary_topics": [
+        "dependency-management",
+        "docker-compose"
+      ]
+    },
+    "superpowers/specs/2026-06-16-second-brain-design.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-06-16-second-brain-design.md",
+      "hash": "47f9f9d6d3d9cd908f5219626491f2972b3b310f6567e3c99712a7de74b79cc8",
+      "primary_topic": "second-brain-architecture",
+      "secondary_topics": [
+        "memory-system",
+        "database-schema"
+      ]
+    },
+    "superpowers/specs/2026-06-17-db-migration-container-design.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-06-17-db-migration-container-design.md",
+      "hash": "b4a2af4083a7b518efaaa0fe720728375b9344cdae96cf02c1f94b45f7180b06",
+      "primary_topic": "database-migration-container",
+      "secondary_topics": [
+        "docker-compose"
+      ]
+    },
+    "superpowers/specs/2026-06-17-dockerfile-consolidation-design.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-06-17-dockerfile-consolidation-design.md",
+      "hash": "9d4de1edfaca601db51c87c421f2201bd61288417394fccc2c340bf1d84a8331",
+      "primary_topic": "dockerfile-consolidation",
+      "secondary_topics": [
+        "docker-compose",
+        "repo-structure"
+      ]
+    },
+    "superpowers/specs/2026-06-17-workspace-restructure-design.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-06-17-workspace-restructure-design.md",
+      "hash": "90703e7b08391a0dea2fb0af880dbc3d816fe55f2aa450ee8fea2d77474aba66",
+      "primary_topic": "uv-workspace-restructure",
+      "secondary_topics": [
+        "repo-structure"
+      ]
+    },
+    "superpowers/specs/2026-06-19-autonomous-feature-development-loop-design.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-06-19-autonomous-feature-development-loop-design.md",
+      "hash": "b0ecb3f3cb73bbde0d673dfb6910f964434fb05b745abd3d0915aaae88cb9de0",
+      "primary_topic": "autonomous-feature-development-loop",
+      "secondary_topics": [
+        "git-worktrees"
+      ]
+    },
+    "superpowers/specs/2026-06-24-query-graph-autocommit-fix.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-06-24-query-graph-autocommit-fix.md",
+      "hash": "64124a1bb5e14a34fb8f1f0b6ca196026b0a4972f963c944be580251a5ff79ee",
+      "primary_topic": "query-graph-autocommit-fix",
+      "secondary_topics": [
+        "query-graph"
+      ]
+    },
+    "superpowers/specs/2026-06-25-langchain-otel-instrumentation.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-06-25-langchain-otel-instrumentation.md",
+      "hash": "d8fb8e459bd61fa87bc6ad1886708b93d43a1e8301f651bd3ae0fb396b24686f",
+      "primary_topic": "langchain-otel-instrumentation",
+      "secondary_topics": [
+        "otel-phoenix-tracing"
+      ]
+    },
+    "superpowers/specs/2026-07-01-eval-ragas-collections-migration-design.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-07-01-eval-ragas-collections-migration-design.md",
+      "hash": "8fc8a984ee2ff329ac70f648a8d3ec9007d9226727771f90725774885622c24b",
+      "primary_topic": "ragas-collections-migration",
+      "secondary_topics": [
+        "evaluation-harness"
+      ]
+    },
+    "superpowers/specs/2026-07-03-integration-test-fixes-design.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-07-03-integration-test-fixes-design.md",
+      "hash": "ac06a16e82a684b5a28ecda05658213d68997c247bab3b6ccc303bd6f5ac9205",
+      "primary_topic": "integration-testing",
+      "secondary_topics": [
+        "memory-system",
+        "database-schema"
+      ]
+    },
+    "superpowers/specs/2026-07-03-python-3-13-upgrade-design.md": {
+      "extract_path": ".llm-digested/superpowers/specs/2026-07-03-python-3-13-upgrade-design.md",
+      "hash": "1e42fe934f74ab1d4bcdd8ff52a5cd77e53cdb05eb5475182195147d7ded029e",
+      "primary_topic": "python-3-13-upgrade",
+      "secondary_topics": [
+        "dependency-management"
+      ]
+    }
+  },
+  "version": 1
+}

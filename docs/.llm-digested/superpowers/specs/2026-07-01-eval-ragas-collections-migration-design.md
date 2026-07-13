@@ -1,0 +1,52 @@
+# Eval RAGAS Collections Migration Design
+
+Source: docs/superpowers/specs/2026-07-01-eval-ragas-collections-migration-design.md
+Primary-Topic: ragas-collections-migration
+Secondary-Topics: eval-harness, ollama-embeddings
+
+## Key Concepts
+
+- **Problem statement**: `just eval-baseline` crashed with `openai.OpenAIError: Missing credentials` and printed `ragas.metrics`/`LangchainLLMWrapper` deprecation warnings. Goal: fix the crash and remove deprecated APIs without breaking the offline unit test suite.
+- **Root cause**: The crash was not about the judge LLM — `baseline.py` and `run_eval.py` already used Anthropic (`ChatAnthropic(model="claude-sonnet-4-6")`) for judging. The actual issue: `AnswerRelevancy` metric requires a separate **embeddings** model (cosine similarity between the original question and a question regenerated from the answer). Neither file passed embeddings explicitly, so RAGAS's `evaluate()` fell back to its OpenAI default embedder, which requires `OPENAI_API_KEY`.
+- Anthropic and xAI/Grok do not expose public embeddings APIs, so swapping the judge LLM provider would not have fixed this — must supply an explicit embeddings client.
+- Project already runs local embeddings via Ollama (`qwen3-embedding:0.6b`) for RAG retrieval in `run_eval.py` — this design reuses that same model for the RAGAS judge's embeddings needs.
+- **Why not a one-line fix**: Simply passing `embeddings=` into the existing `evaluate()`/`EvaluationDataset` call was ruled out because:
+  - `ragas.metrics.{AnswerRelevancy,Faithfulness}` (legacy) are deprecated in ragas 0.4.3 in favor of `ragas.metrics.collections.{AnswerRelevancy,Faithfulness}`.
+  - Collections metrics inherit from `ragas.metrics.collections.base.BaseMetric`, a different class hierarchy than `ragas.metrics.base.Metric`. `ragas.evaluate()` does `isinstance(m, Metric)` and rejects collections metrics outright.
+  - `ragas.evaluate()` itself emits its own `DeprecationWarning` (ragas is moving to an `@experiment` decorator / manual scoring pattern).
+  - Conclusion: fixing the crash and clearing deprecation warnings requires dropping `evaluate()` / `EvaluationDataset` / `SingleTurnSample` / `LangchainLLMWrapper` entirely and hand-writing the scoring loop against the collections metrics' async `.ascore()` API.
+- **New shared module `apps/eval/ragas_client.py`**:
+  - `ANTHROPIC_API_KEY`, `OLLAMA_URL` (default `http://localhost:11434`), `EMBEDDING_MODEL = "qwen3-embedding:0.6b"`, `JUDGE_MODEL = "claude-sonnet-4-6"` constants.
+  - `build_llm()`: builds an Instructor-based Anthropic LLM via `ragas.llms.base.llm_factory(JUDGE_MODEL, provider="anthropic", client=anthropic.AsyncAnthropic(...))`. Must pop `top_p` from `llm.model_args` after factory returns it, because `claude-sonnet-4-6` rejects `temperature`+`top_p` both being set (HTTP 400), and RAGAS's `InstructorModelArgs` defaults both with no constructor-level way to omit one.
+  - `build_embeddings()`: builds local Ollama embeddings via `ragas.embeddings.base.embedding_factory("openai", model=EMBEDDING_MODEL, client=openai.AsyncOpenAI(base_url=f"{OLLAMA_URL}/v1", api_key="ollama"))` — no OpenAI key needed, points at Ollama's OpenAI-compatible endpoint instead of api.openai.com.
+  - `safe_mean(values: list[float]) -> float | None`: averages non-NaN scores, returns `None` if every score is NaN, rounds to 4 decimals.
+  - `score_or_nan(metric, **kwargs) -> float`: centralizes per-sample scoring try/except — awaits `metric.ascore(**kwargs)`, returns `.value`; on any exception logs metric class name + exception type/message to stderr and returns `float("nan")`, so one bad sample doesn't lose the rest of the batch.
+  - Both `build_llm()` and `build_embeddings()` MUST use async clients (`anthropic.AsyncAnthropic`, `openai.AsyncOpenAI`), not sync — RAGAS collections metrics call `agenerate()`/`aembed_text()` internally, which require async clients; sync clients raise `TypeError: Cannot use agenerate() with a synchronous client`. This was discovered live during Tier-3 verification, not anticipated in the original design.
+  - `score_or_nan` was added during code review (round 2) to replace 6 duplicated inline try/except blocks (2 in `baseline.py`, 4 in `run_eval.py`) that silently swallowed errors with no logging.
+- **`apps/eval/baseline.py` changes**:
+  - Import switches from `ragas.metrics.{AnswerRelevancy,Faithfulness}` to `ragas.metrics.collections.{AnswerRelevancy,Faithfulness}`.
+  - Replaces `LangchainLLMWrapper(ChatAnthropic(...))` + `evaluate(dataset=..., metrics=...)` with an explicit async loop `_score_all(results)` that builds `llm`/`embeddings` once via `ragas_client`, constructs `Faithfulness(llm=llm)` and `AnswerRelevancy(llm=llm, embeddings=embeddings)`, then iterates `results` sequentially calling `ragas_client.score_or_nan(...)` for each metric per result.
+  - Faithfulness scoring uses `retrieved_contexts=[r["expected_answer"]]` as a ponytail-marked proxy for the no-retrieval baseline (no real retrieved context exists in baseline mode).
+  - `compute_baseline_metrics(results)` keeps its existing sync signature (wraps `asyncio.run(_score_all(results))` then applies `safe_mean` per metric name) — `main()` is unchanged.
+  - Preserves prior behavior of `evaluate(..., raise_exceptions=False)`: one bad sample (NaN) doesn't drop the other results from the mean.
+  - Scoring loop is sequential (not concurrent) — matches existing `run_baseline()` loop style; dataset is only 10-50 pairs, so concurrency isn't worth the complexity.
+- **`apps/eval/run_eval.py` changes**: same treatment, extended to all four RAGAS metrics: `ContextRecall`, `ContextPrecision`, `Faithfulness`, `AnswerRelevancy`, all imported from `ragas.metrics.collections`. Each is scored per-result via `ragas_client.score_or_nan`, with metric-specific kwargs (e.g. `ContextRecall` takes `retrieved_contexts` + `reference`; `ContextPrecision` takes `reference` + `retrieved_contexts`; `Faithfulness` takes `retrieved_contexts`; `AnswerRelevancy` takes only `user_input`/`response`).
+  - `run_eval.py` keeps its own separate `OllamaEmbeddings` (via `langchain-ollama`) for embedding the *query* before the pgvector similarity search — a different consumer needing a raw `list[float]`, distinct from the RAGAS judge's `BaseRagasEmbedding` interface used via `ragas_client.build_embeddings()`. Only the RAGAS metric construction switches to the shared client.
+  - `ANTHROPIC_API_KEY` constant is removed from `run_eval.py` and moved to `ragas_client.py`.
+- **Tests**: `apps/eval/tests/unit/test_baseline.py`, `test_run_eval.py`, `test_smoke.py` currently mock `evaluate()`, `SingleTurnSample`, `EvaluationDataset`, `LangchainLLMWrapper` — must be rewritten (per TDD, before the implementation change) to mock `ragas_client.build_llm`/`build_embeddings` as sentinel objects, mock each collections metric class so `.ascore()` is an `AsyncMock` returning a `MetricResult`-like object with a fixed `.value`, and add a test for the per-sample-failure → NaN → excluded-from-mean path (previously untested, implicit in `evaluate()`'s default behavior). `just test-eval` must stay green throughout the change — no red-then-fix-later.
+- **What does NOT change**: `generate_dataset.py` (doesn't touch RAGAS metrics); `compare.py` (only reads already-computed metric JSON); `run_baseline()`/`run_rag_eval()` answer-generation loops (only metrics-computation functions change); public function signatures `compute_baseline_metrics(results) -> dict`, `compute_rag_metrics(results) -> dict`, and `main()` in both files; `.env.template` (no new env vars — `OLLAMA_URL` already existed).
+- **Live verification findings (Tier-3)**: initial `just eval-baseline`/`just eval-rag` runs exited 0 but every metric was `null` even though `just test-eval`/`just lint`/`just type-check` were green — root cause was `_score_all()`'s bare `except Exception: append(nan)` silently swallowing real errors the mocked unit tests never exercised. Two real bugs found and fixed live:
+  1. Sync clients passed to `llm_factory()`/`embedding_factory()` raised `TypeError: Cannot use agenerate() with a synchronous client` — fixed by switching to `AsyncAnthropic`/`AsyncOpenAI` (commit `63c7ed9`).
+  2. Anthropic HTTP 400 `"temperature and top_p cannot both be specified for this model"` — fixed by popping `top_p` from `llm.model_args` (commit `435619e`).
+  - Final state: no `OpenAIError`, no deprecation warnings, non-null scores for all metrics in both baseline and RAG eval; `just test-eval`, `just lint`, `just type-check` all pass.
+- **Decisions log** (10 entries):
+  1. Embedding source for `AnswerRelevancy` → reuse Ollama `qwen3-embedding:0.6b` (already running locally, no API key needed, Anthropic/Grok lack embeddings APIs).
+  2. Migrate `ragas.metrics` deprecation now (not deferred) to `ragas.metrics.collections` — user chose to clear the warning permanently; investigation showed this also removes the deprecated `evaluate()` harness.
+  3. Fix `run_eval.py` too, not just `baseline.py` — identical latent crash, untriggered only because baseline runs first.
+  4. Rewrite the 67 existing mocked unit tests as part of this change — TDD requirement, `just test-eval` must stay green.
+  5. Keep `evaluate()`'s per-sample error tolerance (catch, NaN, continue) — matches current behavior, one bad sample shouldn't lose the rest.
+  6. Scoring loop concurrency: sequential — matches existing loop style, dataset is small (10-50 pairs).
+  7. Shared setup code (`llm_factory`/`embedding_factory`/NaN-mean) extracted into `ragas_client.py` — avoids ~20 duplicated lines across the two touched files.
+  8. Sync vs async ragas client: async (`AsyncAnthropic`/`AsyncOpenAI`) required because collections metrics call `agenerate()`/`aembed_text()` internally; found during live Tier-3 verification, not anticipated originally.
+  9. `temperature`+`top_p` both set for `claude-sonnet-4-6` → pop `top_p` from `llm.model_args` after `llm_factory()` returns it; Anthropic API rejects both being set for this model; found during live Tier-3 verification.
+  10. The 6 near-identical per-sample `try/except Exception: append(nan)` blocks (2 in `baseline.py`, 4 in `run_eval.py`) → extracted into `score_or_nan(metric, **kwargs) -> float` in `ragas_client.py`, logging metric name + exception to stderr before returning NaN; code-review finding (round 2) — duplication hurt scannability and silent swallowing masked real bugs (the Decisions #8/#9 failures) as unexplained `null` metrics; fixed in commit `a0d243b`.
