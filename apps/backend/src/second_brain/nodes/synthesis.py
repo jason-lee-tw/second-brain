@@ -42,7 +42,9 @@ class SynthesisNode(BaseAgentNode[SecondBrainState, SynthesisNodeOutput]):
   """Generates a final answer with confidence scoring."""
 
   def __init__(self):
-    super().__init__(ClaudeAgent(CLAUDE_MODEL_NAME.SONNET, temperature=None))
+    super().__init__(
+      ClaudeAgent(CLAUDE_MODEL_NAME.SONNET, temperature=None, max_tokens=4096)
+    )
     self._structured_llm = self._agent.get_model().with_structured_output(
       _SynthesisOutput
     )
@@ -101,7 +103,9 @@ class SynthesisNode(BaseAgentNode[SecondBrainState, SynthesisNodeOutput]):
       "- If context is limited, say so honestly and keep confidence lower.\n"
     )
 
-    output: _SynthesisOutput = await self._structured_llm.ainvoke(prompt)  # pyright: ignore[reportAssignmentType]
+    output: _SynthesisOutput = await self._ainvoke_structured(  # pyright: ignore[reportAssignmentType]
+      self._structured_llm, prompt
+    )
 
     confidence = output.confidence
     # Floor confidence for conversational queries: skipping external retrieval

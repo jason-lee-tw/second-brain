@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import ValidationError
 
 from tests.unit.conftest import make_state
 
@@ -408,3 +409,57 @@ async def test_synthesize_answer_context_used_empty_when_no_context():
     result = await synthesize_answer(state)
 
   assert result["context_used"] == []
+
+
+@patch("second_brain.nodes.base_node.agents.claude_agent.ChatAnthropic")
+def test_synthesis_node_sets_max_tokens_4096(mock_chat_anthropic):
+  """SynthesisNode must raise max_tokens above the 1024 library default.
+
+  Regression guard for docs/bugs/004-synthesis-max-tokens-truncation.md —
+  1024 truncated a verbose completion before the required `reasoning` field
+  was written, causing an uncaught ValidationError -> 500.
+  """
+  from second_brain.nodes.synthesis import SynthesisNode
+
+  SynthesisNode()
+
+  _, kwargs = mock_chat_anthropic.call_args
+  assert kwargs["max_tokens"] == 4096
+
+
+@pytest.mark.asyncio
+async def test_synthesize_answer_retries_once_when_structured_output_is_truncated():
+  """A ValidationError from a truncated completion (max_tokens) triggers one retry.
+
+  Regression guard for docs/bugs/004-synthesis-max-tokens-truncation.md.
+  """
+  from second_brain.nodes.synthesis import _SynthesisOutput
+
+  try:
+    _SynthesisOutput.model_validate({"final_answer": "partial", "confidence": 0.75})
+  except ValidationError as exc:
+    truncated_error = exc
+  else:
+    raise AssertionError("expected ValidationError")
+
+  mock_output = _make_synthesis_output(
+    final_answer="Complete answer.", confidence=0.75, reasoning="Full reasoning."
+  )
+  state = make_state(
+    messages=[HumanMessage(content="query")],
+    routing_decision="rag",
+    rag_results=[
+      {"content": "context", "score": 0.9, "chunk_index": 0, "metadata": {}}
+    ],
+  )
+
+  with patch(
+    "second_brain.nodes.synthesis.synthesize_answer._structured_llm"
+  ) as mock_llm:
+    mock_llm.ainvoke = AsyncMock(side_effect=[truncated_error, mock_output])
+    from second_brain.nodes.synthesis import synthesize_answer
+
+    result = await synthesize_answer(state)
+
+  assert result["final_answer"] == "Complete answer."
+  assert mock_llm.ainvoke.call_count == 2
