@@ -48,11 +48,11 @@ opentelemetry-instrumentation-sqlalchemy
 opentelemetry-instrumentation-psycopg
 ```
 
-All four verified present on PyPI at `0.64b0`. Added via `uv add` in `apps/backend/` — never hand-edited into `pyproject.toml`/`uv.lock`. Same trust tier as the already-installed `opentelemetry-instrumentation-fastapi`: pure span-emission shims, no new runtime behavior.
+All four verified present on PyPI at `0.63b1` (pinned as `>=0.63b1` in `pyproject.toml`, resolved to `0.63b1` in `uv.lock`). Added via `uv add` in `apps/backend/` — never hand-edited into `pyproject.toml`/`uv.lock`. Same trust tier as the already-installed `opentelemetry-instrumentation-fastapi`: pure span-emission shims, no new runtime behavior.
 
 ### 2. Instrument the raw drivers in `setup_tracing()`
 
-In `src/second_brain/observability/tracing.py`, after `register(...)` returns the provider, call each instrumentor's `.instrument()` with no arguments (all four patch at the class level — `Engine`, `Connection`, `AsyncClient` — so it doesn't matter whether pools/engines/clients were constructed before or after this call):
+In `src/second_brain/observability/tracing.py`, after `register(...)` returns the provider, call each instrumentor's `.instrument()`. Three of the four — httpx, asyncpg, psycopg — patch at the class level (`AsyncClient`, the asyncpg connection class, `Connection`), so it doesn't matter whether clients/connections were constructed before or after this call. SQLAlchemy is the exception: a bare `SQLAlchemyInstrumentor().instrument()` only patches the `create_engine()` factory and `Engine.connect()` at the class level — it never attaches an `EngineTracer` to an engine that already exists. `db/session.py` constructs `engine` as a module-level singleton at import time, before `setup_tracing()` runs in the FastAPI lifespan, so a bare call produces zero per-statement spans for it. The instance must be passed explicitly via `instrument(engine=engine)`:
 
 ```python
 provider = register(
@@ -62,7 +62,7 @@ provider = register(
 )
 HTTPXClientInstrumentor().instrument()
 AsyncPGInstrumentor().instrument()
-SQLAlchemyInstrumentor().instrument()
+SQLAlchemyInstrumentor().instrument(engine=engine)
 PsycopgInstrumentor().instrument()
 return provider
 ```
@@ -151,6 +151,21 @@ End-to-end confirmation is manual, not automated (needs live Phoenix/Ollama/Post
 | Modify | `apps/backend/tests/unit/test_observability/test_tracing.py` |
 | Modify | `apps/backend/tests/unit/test_graphs/test_query_graph_build.py` |
 | Modify | `apps/backend/tests/unit/test_graphs/test_ingestion_graph.py` |
+
+---
+
+## Implementation Notes (post-delivery)
+
+- `redact_inbound`/`redact_outbound` (both defined in `nodes/pii_redaction.py`)
+  are deliberately left unwrapped by `trace_node`. Both are sync (`def __call__`, not
+  `async def`) and do pure in-memory regex PII redaction with no I/O — the same
+  category as the `pick_file_node` exception in Section 4 above. Anyone following the
+  Task 5 manual-verification checklist in the companion plan should not expect to see
+  spans for these two nodes in Phoenix.
+- The SQLAlchemy `engine=` requirement described in Section 2 above was found via live
+  verification against a running Phoenix instance, not by reading instrumentor source
+  first. See `.loop-logs/2026-07-15-otel-tracing-coverage-fix/verifications/verification-1.md`
+  for the full root-cause writeup.
 
 ---
 
