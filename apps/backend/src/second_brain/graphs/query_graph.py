@@ -18,6 +18,7 @@ from second_brain.nodes.pii_redaction import redact_inbound, redact_outbound
 from second_brain.nodes.rag_retrieval import retrieve_from_rag
 from second_brain.nodes.synthesis import synthesize_answer
 from second_brain.nodes.web_research import search_web
+from second_brain.observability.tracing import trace_node
 
 
 def _route_retrieval(state: SecondBrainState) -> str | list[Send]:
@@ -66,14 +67,22 @@ async def build_query_graph(
   workflow = StateGraph(SecondBrainState)
 
   # Nodes
+  # redact_inbound/redact_outbound are sync and do no I/O (pure regex-based PII
+  # redaction) — not wrapped in trace_node, which only accepts async callables;
+  # nothing worth tracing inside pure CPU work anyway (same rationale as
+  # pick_file_node in the ingestion graph).
   workflow.add_node("redact_inbound", redact_inbound)
-  workflow.add_node("memory_retrieval_node", memory_retrieval_node)
-  workflow.add_node("memory_agent", memory_agent_node)
-  workflow.add_node("memory_persistence", memory_persistence_node)
-  workflow.add_node("orchestrator", route_query)
-  workflow.add_node("rag_retrieval", retrieve_from_rag)
-  workflow.add_node("web_research", search_web)
-  workflow.add_node("synthesis", synthesize_answer)
+  workflow.add_node(
+    "memory_retrieval_node", trace_node("memory_retrieval_node")(memory_retrieval_node)
+  )
+  workflow.add_node("memory_agent", trace_node("memory_agent")(memory_agent_node))
+  workflow.add_node(
+    "memory_persistence", trace_node("memory_persistence")(memory_persistence_node)
+  )
+  workflow.add_node("orchestrator", trace_node("orchestrator")(route_query))
+  workflow.add_node("rag_retrieval", trace_node("rag_retrieval")(retrieve_from_rag))
+  workflow.add_node("web_research", trace_node("web_research")(search_web))
+  workflow.add_node("synthesis", trace_node("synthesis")(synthesize_answer))
   workflow.add_node("redact_outbound", redact_outbound)
 
   # Edges
