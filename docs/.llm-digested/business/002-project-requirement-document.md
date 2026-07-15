@@ -1,0 +1,83 @@
+# Project Requirement Document — Second Brain
+
+Source: docs/business/002-project-requirement-document.md
+Primary-Topic: second-brain-requirements
+Secondary-Topics: query-graph-design, memory-system-design
+
+## Key Concepts
+
+- Overview: Personal "Second Brain" knowledge management system for mixed personal/work use. Ingests local markdown files and web URLs, stores content for semantic retrieval, maintains persistent memory of conversations/learned facts. Must demonstrate measurable improvement over a no-RAG baseline via rigorous evaluation. Status: Approved, dated 2026-06-16. Full design spec lives at docs/superpowers/specs/2026-06-16-second-brain-design.md.
+- Tech stack decisions (with rationale):
+  - Language: Python (required by assignment)
+  - Web framework: FastAPI (lightweight, async-native, integrates with SQLModel)
+  - Agent orchestration: LangGraph (required by assignment)
+  - Database: PostgreSQL + pgvector (required by assignment; pgvector for semantic search)
+  - ORM + migrations: SQLModel + Alembic (SQLModel reduces boilerplate — DB models double as FastAPI schemas)
+  - Observability: Arize Phoenix (OTEL) (required by assignment)
+  - Embedding model: `qwen3-embedding:0.6b` via Ollama — fully local, no API cost, dim=1024
+  - LLM lightweight: `claude-haiku-4-5` for routing, web research, memory extraction
+  - LLM synthesis/eval: `claude-sonnet-4-6` for final answers and LLM-as-judge evals
+  - LLM provider: Claude only, no Gemini — Anthropic models exclusively
+  - Web search/crawl: Tavily SDK (required)
+  - Containerisation: Docker Compose (required)
+- API endpoints: `POST /query` (chat with Second Brain), `POST /ingest/file` (process pending markdown from `temp/pending-digest-docs/`), `POST /ingest/url` (receive URL(s), crawl via Tavily, ingest as markdown).
+- `/query` request contract: `{ "message": "string", "sessionId": "UUID7 or null" }`.
+- `/query` response contract: `{ "answer": string, "sessionId": UUID7, "confidence": float, "isUncertain": bool, "conflictDetected": bool, "conflictContext": [] }`.
+  - `sessionId` null → new conversation; UUID7 → continues existing session; it is the LangGraph `threadId` and chat history key (stored in Postgres).
+  - `isUncertain=true` when confidence < 0.7 — prompts user to optionally correct the answer.
+  - `conflictDetected=true` when a newly extracted fact conflicts with an existing memory.
+- `/ingest/file` response contract: `{ "numberOfFilePassed": int, "failedFiles": [filenames] }`. Each file retried up to 3 times on failure; files exhausting retries move to `temp/failed/`.
+- Multi-agent pattern decision: Single Supervisor Graph (LangGraph). Orchestrator is an LLM-powered node (not rule-based) reading user query + memory context, deciding routing. RAG Retrieval and Web Research fan out in parallel via LangGraph's `Send` API when both needed.
+  - Rejected: Hierarchical multi-graph (added indirection without benefit at this scope); Agent-as-tool/ReAct (harder to enforce fan-out parallelism and guaranteed synthesis step).
+- Two separate LangGraph graphs: Query Graph (`SecondBrainState`, serves `POST /query`) and Ingestion Graph (`IngestionState`, serves `POST /ingest/file` and `POST /ingest/url`). They share no runtime state — keeps state schemas clean.
+- Docker network isolation: `app_network` = [backend, app_postgres]; `phoenix_network` = [phoenix, phoenix_postgres]. Backend never joins `phoenix_network`; OTEL traces exported to Phoenix via host gRPC port 4317 — deliberate security boundary preventing backend from directly accessing Phoenix's database. Linux Docker hosts need `extra_hosts: ["host.docker.internal:host-gateway"]` on the backend service.
+- Query Graph flow (mermaid, sequential with fan-out): User Message → PIIRedactionNode (inbound, redacts `messages[-1].content`) → MemoryRetrievalNode (cosine similarity on `learned_facts` + `model_corrections`) → Orchestrator (`claude-haiku-4-5`, reads last message + retrieved memory, routes to rag/web/both/neither) → [RAG Retrieval Agent (tool call, pgvector top-k=5) and/or Web Research Agent (`claude-haiku-4-5`, Tavily top-3) or pass-through] → Synthesis (`claude-sonnet-4-6`, produces final_answer + confidence + is_uncertain) → PIIRedactionNode (outbound, redacts final_answer before appending to messages) → Memory Agent (`claude-haiku-4-5`, fact extraction + correction detection, reads messages[-2] and messages[-1]) → conflict branch sets `awaiting_conflict_clarification=True` and surfaces conflict, else pass-through → MemoryPersistenceNode (writes fact_updates → learned_facts, correction_updates → model_corrections, generates embeddings via Ollama).
+- Agent roles table: PIIRedactionNode-in (rule-based, redacts PII before any LLM sees inbound message); MemoryRetrievalNode (tool call, cosine similarity on learned_facts + model_corrections, populates retrieved_memory); Orchestrator (claude-haiku-4-5, LLM-driven routing rag/web/both/neither using Send for fan-out); RAG Retrieval (tool call, embeds query via Ollama, pgvector top-k=5); Web Research (claude-haiku-4-5, Tavily search top-3 results, rate-limited); Synthesis (claude-sonnet-4-6, final answer from all context + confidence score; "neither" routing has confidence floor 0.5); PIIRedactionNode-out (rule-based, redacts PII from final_answer before chat history); Memory Agent (claude-haiku-4-5, extracts facts, detects corrections, manages awaiting_correction and awaiting_conflict_clarification state transitions); MemoryPersistenceNode (tool call, writes fact_updates/correction_updates, generates embeddings); Ingestion Agent (claude-haiku-4-5, chunks docs, generates contextual headers, embeds, upserts to document_chunks).
+- LangGraph state TypedDicts:
+  - `RagResult`: content, score, chunk_index, metadata.
+  - `WebResult`: title, url, content.
+  - `MemoryItem`: id, fact, confidence, type (Literal["learned_fact", "model_correction"]).
+  - `FactUpdate`: fact, confidence, conflicts_with (list of IDs of conflicting existing facts).
+  - `CorrectionUpdate`: original_answer (from messages[-2]), correction, root_cause.
+  - `SecondBrainState`: session_id, messages (trimmed view; full history in checkpoint), rag_results, web_results, retrieved_memory, routing_decision (Literal rag/web/both/neither), final_answer, confidence, is_uncertain, awaiting_correction (persisted across turns via LangGraph checkpointing), awaiting_conflict_clarification, conflict_context, fact_updates, correction_updates.
+- Ingestion Graph flow (mermaid): files input list → move file to in_progress + checkpoint state → Ingestion Agent (claude-haiku-4-5, chunk + embed + upsert to document_chunks) → on success: move in_progress→processed; on failure: check retry_count < 3 — if yes increment retry_count and move to retry_queue, if no move to failed (terminal) → loop while retry_queue non-empty → return response with numberOfFilePassed + failedFiles.
+- URL ingestion flow: `POST /ingest/url` → Tavily crawl extracts page content → save as `.md` in `temp/pending-digest-docs/` → triggers file ingestion via the same Ingestion Graph.
+- Ingestion State TypedDicts: `FailedFile` (filename, error, retry_count); `IngestionState` (files: original input queue, in_progress: crash-safe in-flight tracking, processed: successfully ingested filenames, retry_queue: FailedFile list with retry_count < 3, failed: FailedFile list with retry_count >= 3 terminal failures).
+- File folder structure: `temp/pending-digest-docs/` (drop files here to ingest), `temp/processed/` (moved after successful ingestion), `temp/failed/` (moved after 3 retries exhausted).
+- Document deduplication: content hash (MD5) stored in `ingested_documents`; files with matching hash skipped on re-ingestion.
+- Document chunking strategy: Hybrid — split on structural boundaries first (markdown headings H1/H2/H3 → blank lines → sentence boundaries), then apply token cap.
+  - Markdown articles/notes: target 512 tokens, max 1024 tokens, overlap 64 tokens.
+  - Meeting transcriptions: target 256 tokens, max 512 tokens, overlap 0.
+  - Code fences: atomic chunking, no max/overlap.
+  - Contextual retrieval headers: each chunk gets a 50–100 token LLM-generated context header prepended before embedding (e.g. "This chunk is from [doc title], section [H1 > H2], covering [topic]."), based on Anthropic research showing 49–67% retrieval failure rate reduction.
+  - Header metadata: H1 > H2 > H3 hierarchy stored as chunk metadata for filtered retrieval at query time.
+- Memory system decisions:
+  - Learned Facts: auto-extracted from every message when the user refers to themselves; embedded via Ollama before storing (semantic retrieval at query time); conflict detection via cosine similarity against existing facts before storing; if conflict, surface to user, wait for clarification, then add/modify/remove.
+  - Model Corrections: Synthesis flags `is_uncertain=True` when confidence < 0.7; `awaiting_correction` persists across turns via LangGraph checkpointing; user corrects in chat; Memory Agent detects correction, extracts root cause, stores; if user does NOT correct (sends new query instead), `awaiting_correction` resets to False.
+  - Memory Retrieval: both `learned_facts` and `model_corrections` tables have `VECTOR(1024)` embedding columns; `MemoryRetrievalNode` runs cosine similarity search at start of every query; `model_corrections.embedding` encodes the `correction` field (not `original_answer`) — this is deliberate so retrieval surfaces the correct answer, not the mistake.
+- PII guardrail decisions: Scope is broad — names, emails, phones, physical addresses, national IDs, financial data, medical terms. Action: redact with typed placeholders — `[NAME]`, `[EMAIL]`, `[PHONE]`, `[ADDRESS]`, `[ID]`, `[CARD]`, `[MEDICAL]`. Applied at two points: (1) inbound on `messages[-1].content` before any LLM node, (2) outbound on `final_answer` before it is appended to `messages` and persisted to `chat_history`.
+- Database schema (PostgreSQL + pgvector):
+  - `chat_history`: session_id (UUID7 PK), thread_data (JSONB), created_at, updated_at — LangGraph session state.
+  - `document_chunks`: id (UUID PK), doc_id (FK → ingested_documents.id), content (TEXT, chunk text with contextual header prepended), embedding (VECTOR(1024)), chunk_index (INT), metadata (JSONB — {source, heading_path, content_type, char_count}), created_at — RAG document store.
+  - `ingested_documents`: id (UUID PK), filename, source_url (null for local files), content_hash (TEXT MD5), status ('processed'|'failed'), ingested_at — ingestion deduplication.
+  - `learned_facts`: id (UUID PK), fact (TEXT, PII-scrubbed), embedding (VECTOR(1024)), source_session (UUID7 FK → chat_history.session_id), confidence (FLOAT), created_at, updated_at — long-term memory.
+  - `model_corrections`: id (UUID PK), original_answer (TEXT), correction (TEXT), root_cause (TEXT), embedding (VECTOR(1024), encodes `correction` field), source_session (UUID7 FK → chat_history.session_id), created_at — long-term memory.
+  - ORM: SQLModel + Alembic; SQLModel models serve as both DB table definitions and FastAPI schemas; pgvector via `pgvector-python`.
+- Observability decisions: full distributed tracing at three levels per `/query` request — LLM call level (every prompt/completion, token counts, latency), Agent/node level (which agents ran, order, duration, routing decision taken), Request level (end-to-end trace from HTTP request to final response). Phoenix stores trace data in `phoenix_postgres` (only accessible within `phoenix_network`). Backend exports via OTEL gRPC to Phoenix on host port 4317; backend never joins `phoenix_network`.
+- Evaluation decisions:
+  - Dataset: Hybrid — Claude generates ~100 Q&A pairs from ingested documents; user curates to ~30–50. Each pair: question + expected answer + expected source chunks.
+  - Metrics: Retrieval layer uses `context_precision`, `context_recall` via RAGAS. Answer layer uses `faithfulness`, `answer_relevancy` via RAGAS + `claude-sonnet-4-6` as judge.
+  - Baseline: same questions through (1) no-RAG (Claude only, no retrieval) and (2) full RAG pipeline. RAGAS metrics must show measurable improvement of RAG over baseline.
+  - When: offline / on-demand script, not part of CI.
+  - Confidence threshold: starting value `confidence < 0.7` → `is_uncertain=True`; calibrated during eval by measuring precision/recall of uncertainty flags against human-labelled ground truth.
+- Acceptance criteria (AC-1 through AC-10):
+  - AC-1: After a turn that extracts a user fact, `learned_facts` table contains that fact with a valid embedding.
+  - AC-2: If a fact conflicts with existing memory, the API response includes a conflict notification and `awaiting_conflict_clarification=True`.
+  - AC-3: Given `awaiting_correction=True`, sending an unrelated query resets `awaiting_correction=False`.
+  - AC-4: Given `awaiting_correction=True` and a user correction, `model_corrections` table contains root cause + correction with a valid embedding.
+  - AC-5: PII in user messages is redacted before reaching any LLM node.
+  - AC-6: PII in `final_answer` is redacted before being persisted to `chat_history`.
+  - AC-7: A file that fails ingestion is retried up to 3 times; on 3rd failure it moves to `temp/failed/`.
+  - AC-8: A file matching an existing `content_hash` in `ingested_documents` is skipped on re-ingestion.
+  - AC-9: RAGAS `context_recall` and `answer_faithfulness` for the full pipeline are measurably higher than the no-RAG baseline.
+  - AC-10: `sessionId=null` creates a new LangGraph thread; subsequent requests with the returned UUID7 continue that thread.

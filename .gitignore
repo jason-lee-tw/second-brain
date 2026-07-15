@@ -7,8 +7,16 @@ __pycache__/
 *.egg-info/
 .ruff_cache
 
+# OS
+.DS_Store
+
+# Obsidian config
+.obsidian
+
 # Environment variable files
 .env
 .env.*.local
 !.env.template
 .claude/worktrees/
+
+.digest.lock
