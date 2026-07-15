@@ -59,7 +59,10 @@ def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
   """
 
   def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-    if not inspect.iscoroutinefunction(func):
+    is_async = inspect.iscoroutinefunction(func) or inspect.iscoroutinefunction(
+      getattr(func, "__call__", None)
+    )
+    if not is_async:
       raise TypeError(f"trace_node can only decorate async functions, got: {func!r}")
     # Acquired once per decoration (not per call). Before setup_tracing() runs this
     # returns a ProxyTracer that lazily forwards to the real provider — module-level

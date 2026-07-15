@@ -69,6 +69,22 @@ class TestTraceNode:
     assert spans[0].name == "my-agent-node"
 
   @pytest.mark.asyncio
+  async def test_wraps_callable_instance_with_async_call(self, in_memory_tracer):
+    """trace_node accepts an object whose __call__ is async, not just a bare func."""
+
+    class DummyNode:
+      async def __call__(self, state: dict) -> dict:
+        return {"seen": state}
+
+    traced = trace_node("instance-node")(DummyNode())
+    result = await traced({"x": 1})
+
+    assert result == {"seen": {"x": 1}}
+    spans = in_memory_tracer.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "instance-node"
+
+  @pytest.mark.asyncio
   async def test_preserves_function_return_value(self, in_memory_tracer):
     """trace_node does not alter the wrapped function's return value."""
 
