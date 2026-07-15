@@ -12,6 +12,8 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from phoenix.otel import register
 
+from second_brain.db.session import engine
+
 
 def setup_tracing(
   phoenix_collection_endpoint: str,
@@ -44,7 +46,12 @@ def setup_tracing(
   )
   HTTPXClientInstrumentor().instrument()
   AsyncPGInstrumentor().instrument()
-  SQLAlchemyInstrumentor().instrument()
+  # engine= is required: a bare instrument() call only patches the create_engine()
+  # factory and Engine.connect() at the class level. It never attaches an
+  # EngineTracer to an engine that already exists — and db/session.py constructs
+  # `engine` as a module-level singleton at import time, before setup_tracing()
+  # runs in the FastAPI lifespan — so write spans would never appear otherwise.
+  SQLAlchemyInstrumentor().instrument(engine=engine)
   PsycopgInstrumentor().instrument()
   return provider
 

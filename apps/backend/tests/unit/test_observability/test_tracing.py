@@ -16,6 +16,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
 
+from second_brain.db.session import engine as db_engine
 from second_brain.observability.tracing import setup_tracing, trace_node
 
 
@@ -75,7 +76,13 @@ class TestSetupTracing:
 
     mock_httpx.return_value.instrument.assert_called_once_with()
     mock_asyncpg.return_value.instrument.assert_called_once_with()
-    mock_sqlalchemy.return_value.instrument.assert_called_once_with()
+    # SQLAlchemy needs the engine instance explicitly — a bare instrument() call
+    # only patches create_engine()/Engine.connect() at the class level, it does NOT
+    # attach an EngineTracer to an engine that already exists (db/session.py
+    # constructs `engine` as a module-level singleton at import time, before
+    # setup_tracing() runs in the FastAPI lifespan), so per-statement write spans
+    # would never appear without passing engine= explicitly.
+    mock_sqlalchemy.return_value.instrument.assert_called_once_with(engine=db_engine)
     mock_psycopg.return_value.instrument.assert_called_once_with()
 
 
