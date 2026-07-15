@@ -39,10 +39,16 @@ class TestSetupTracing:
   def test_calls_register_with_correct_args(self):
     """setup_tracing() calls register with endpoint and auto_instrument=True."""
     mock_provider = MagicMock(spec=TracerProvider)
-    with patch(
-      "second_brain.observability.tracing.register",
-      return_value=mock_provider,
-    ) as mock_register:
+    with (
+      patch(
+        "second_brain.observability.tracing.register",
+        return_value=mock_provider,
+      ) as mock_register,
+      patch("second_brain.observability.tracing.HTTPXClientInstrumentor"),
+      patch("second_brain.observability.tracing.AsyncPGInstrumentor"),
+      patch("second_brain.observability.tracing.SQLAlchemyInstrumentor"),
+      patch("second_brain.observability.tracing.PsycopgInstrumentor"),
+    ):
       result = setup_tracing(phoenix_collection_endpoint="http://localhost:4317")
 
     mock_register.assert_called_once_with(
@@ -51,6 +57,26 @@ class TestSetupTracing:
       auto_instrument=True,
     )
     assert result is mock_provider
+
+  def test_instruments_raw_drivers(self):
+    """setup_tracing() must instrument httpx, asyncpg, SQLAlchemy, and psycopg —
+    the raw drivers auto_instrument=True can't reach (it only activates
+    openinference-instrumentation-* packages)."""
+    with (
+      patch("second_brain.observability.tracing.register"),
+      patch("second_brain.observability.tracing.HTTPXClientInstrumentor") as mock_httpx,
+      patch("second_brain.observability.tracing.AsyncPGInstrumentor") as mock_asyncpg,
+      patch(
+        "second_brain.observability.tracing.SQLAlchemyInstrumentor"
+      ) as mock_sqlalchemy,
+      patch("second_brain.observability.tracing.PsycopgInstrumentor") as mock_psycopg,
+    ):
+      setup_tracing(phoenix_collection_endpoint="http://localhost:4317")
+
+    mock_httpx.return_value.instrument.assert_called_once_with()
+    mock_asyncpg.return_value.instrument.assert_called_once_with()
+    mock_sqlalchemy.return_value.instrument.assert_called_once_with()
+    mock_psycopg.return_value.instrument.assert_called_once_with()
 
 
 class TestTraceNode:

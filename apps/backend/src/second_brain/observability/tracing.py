@@ -5,6 +5,10 @@ import inspect
 from typing import Any, Callable
 
 from opentelemetry import trace
+from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from phoenix.otel import register
 
@@ -28,14 +32,21 @@ def setup_tracing(
       The configured ``TracerProvider``, also set as the global provider via
       ``opentelemetry.trace.set_tracer_provider()``.
   """
-  return register(
+  provider = register(
     project_name="second-brain",
     endpoint=phoenix_collection_endpoint,
     # auto_instrument=True causes register() to auto-discover and activate all
     # installed openinference-instrumentation-* packages; no separate
-    # LangChainInstrumentor().instrument() call needed.
+    # LangChainInstrumentor().instrument() call needed. It does NOT cover raw
+    # driver calls (httpx, asyncpg, SQLAlchemy, psycopg) — those need their own
+    # instrumentor, wired up explicitly below.
     auto_instrument=True,
   )
+  HTTPXClientInstrumentor().instrument()
+  AsyncPGInstrumentor().instrument()
+  SQLAlchemyInstrumentor().instrument()
+  PsycopgInstrumentor().instrument()
+  return provider
 
 
 def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
