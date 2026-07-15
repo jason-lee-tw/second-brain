@@ -240,7 +240,6 @@ async def test_build_query_graph_wraps_nodes_in_spans():
   """Async nodes must emit a named span when invoked; the sync, no-I/O
   PII-redaction nodes must not (trace_node only accepts async callables, and
   there's nothing to trace inside pure CPU work)."""
-  import opentelemetry.trace as trace_api
   from langchain_core.messages import HumanMessage
   from opentelemetry import trace
   from opentelemetry.sdk.trace import TracerProvider
@@ -252,16 +251,6 @@ async def test_build_query_graph_wraps_nodes_in_spans():
   exporter = InMemorySpanExporter()
   provider = TracerProvider()
   provider.add_span_processor(SimpleSpanProcessor(exporter))
-
-  # The OTel SDK guards the global TracerProvider with a `Once` latch that
-  # silently ignores set_tracer_provider() after the first call in the
-  # process — see tests/unit/test_observability/conftest.py for the same
-  # workaround, scoped there via an autouse fixture. This test lives outside
-  # that directory, so reset/restore the latch inline instead.
-  original_provider = trace_api._TRACER_PROVIDER
-  original_done = trace_api._TRACER_PROVIDER_SET_ONCE._done
-  trace_api._TRACER_PROVIDER = None
-  trace_api._TRACER_PROVIDER_SET_ONCE._done = False
   trace.set_tracer_provider(provider)
 
   mock_pool = AsyncMock()
@@ -269,50 +258,44 @@ async def test_build_query_graph_wraps_nodes_in_spans():
   mock_saver = MagicMock()
   mock_saver.setup = AsyncMock()
 
-  try:
-    with (
-      patch("second_brain.graphs.query_graph.AsyncConnectionPool", mock_pool_class),
-      patch("second_brain.graphs.query_graph.AsyncPostgresSaver") as MockSaver,
-    ):
-      MockSaver.return_value = mock_saver
-      from second_brain.graphs.query_graph import build_query_graph
+  with (
+    patch("second_brain.graphs.query_graph.AsyncConnectionPool", mock_pool_class),
+    patch("second_brain.graphs.query_graph.AsyncPostgresSaver") as MockSaver,
+  ):
+    MockSaver.return_value = mock_saver
+    from second_brain.graphs.query_graph import build_query_graph
 
-      graph, _pool = await build_query_graph(
-        "postgresql://fake:fake@localhost:5432/test"
-      )
-      base_state = {
-        "session_id": "s1",
-        "rag_results": [],
-        "web_results": [],
-        "retrieved_memory": [],
-        "routing_decision": "neither",
-        "final_answer": "",
-        "confidence": 0.0,
-        "is_uncertain": False,
-        "awaiting_correction": False,
-        "awaiting_conflict_clarification": False,
-        "conflict_context": [],
-        "fact_updates": [],
-        "correction_updates": [],
-      }
-      # Invoke each node's runnable directly via graph.nodes[name].ainvoke()
-      # rather than graph.ainvoke() on the whole graph. The latter drives
-      # LangGraph's Pregel checkpoint loop, which awaits many
-      # AsyncPostgresSaver methods beyond .setup() (aget_tuple,
-      # get_next_version, ...) that a generic Mock can't faithfully emulate.
-      # Calling nodes directly isolates exactly what this test checks: does
-      # add_node() wrap the node in a span.
-      no_messages_state: SecondBrainState = {**base_state, "messages": []}
-      await graph.nodes["memory_retrieval_node"].ainvoke(no_messages_state)
+    graph, _pool = await build_query_graph("postgresql://fake:fake@localhost:5432/test")
+    base_state = {
+      "session_id": "s1",
+      "rag_results": [],
+      "web_results": [],
+      "retrieved_memory": [],
+      "routing_decision": "neither",
+      "final_answer": "",
+      "confidence": 0.0,
+      "is_uncertain": False,
+      "awaiting_correction": False,
+      "awaiting_conflict_clarification": False,
+      "conflict_context": [],
+      "fact_updates": [],
+      "correction_updates": [],
+    }
+    # Invoke each node's runnable directly via graph.nodes[name].ainvoke()
+    # rather than graph.ainvoke() on the whole graph. The latter drives
+    # LangGraph's Pregel checkpoint loop, which awaits many
+    # AsyncPostgresSaver methods beyond .setup() (aget_tuple,
+    # get_next_version, ...) that a generic Mock can't faithfully emulate.
+    # Calling nodes directly isolates exactly what this test checks: does
+    # add_node() wrap the node in a span.
+    no_messages_state: SecondBrainState = {**base_state, "messages": []}
+    await graph.nodes["memory_retrieval_node"].ainvoke(no_messages_state)
 
-      one_message_state: SecondBrainState = {
-        **base_state,
-        "messages": [HumanMessage(content="hello", id="m1")],
-      }
-      await graph.nodes["redact_inbound"].ainvoke(one_message_state)
-  finally:
-    trace_api._TRACER_PROVIDER = original_provider
-    trace_api._TRACER_PROVIDER_SET_ONCE._done = original_done
+    one_message_state: SecondBrainState = {
+      **base_state,
+      "messages": [HumanMessage(content="hello", id="m1")],
+    }
+    await graph.nodes["redact_inbound"].ainvoke(one_message_state)
 
   span_names = {s.name for s in exporter.get_finished_spans()}
   assert "memory_retrieval_node" in span_names
