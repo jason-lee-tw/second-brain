@@ -221,6 +221,18 @@ to:
 
 (The docstring above `setup_tracing` is unchanged.)
 
+> **Post-delivery correction:** Live verification against a running Phoenix instance
+> found the bare `SQLAlchemyInstrumentor().instrument()` call above insufficient. It
+> only patches the `create_engine()` factory and `Engine.connect()` at the class
+> level — it never attaches an `EngineTracer` to an engine that already exists.
+> `db/session.py` constructs `engine` as a module-level singleton at import time,
+> before `setup_tracing()` runs, so the bare call produces zero per-statement spans
+> for it. The correct call is `SQLAlchemyInstrumentor().instrument(engine=engine)`.
+> See the "Implementation Notes (post-delivery)" section of
+> [docs/superpowers/specs/2026-07-15-otel-tracing-coverage-fix.md](../specs/2026-07-15-otel-tracing-coverage-fix.md)
+> for the corrected snippet and root-cause writeup. Do not copy the snippet above
+> as-is.
+
 - [ ] **Step 5: Run tests to verify everything passes**
 
 Run: `cd apps/backend && uv run pytest tests/unit/test_observability/test_tracing.py -v`
@@ -365,6 +377,16 @@ with:
   workflow.add_node("synthesis", trace_node("synthesis")(synthesize_answer))
   workflow.add_node("redact_outbound", trace_node("redact_outbound")(redact_outbound))
 ```
+
+> **Post-delivery correction:** The shipped implementation deliberately does NOT wrap
+> `redact_inbound`/`redact_outbound` in `trace_node`. Both are defined in
+> `nodes/pii_redaction.py` as sync callables (`def __call__`, not `async def`) doing
+> pure in-memory regex PII redaction with no I/O — the same category as the
+> `pick_file_node` exception in Task 4 below. `trace_node` only accepts async
+> callables, so wrapping either would raise `TypeError` at graph-build time. See the
+> "Implementation Notes (post-delivery)" section of
+> [docs/superpowers/specs/2026-07-15-otel-tracing-coverage-fix.md](../specs/2026-07-15-otel-tracing-coverage-fix.md).
+> Do not copy the snippet above as-is for those two nodes.
 
 - [ ] **Step 4: Run tests to verify everything passes**
 
@@ -511,6 +533,11 @@ curl -s -X POST http://localhost:3001/query \
 
 Open Phoenix at `http://localhost:6006`, find the trace for this request, and confirm the waterfall now shows, nested under the request span:
 - Named node spans: `redact_inbound`, `memory_retrieval_node`, `orchestrator`, one of `rag_retrieval`/`web_research`, `synthesis`, `redact_outbound`, `memory_agent`, `memory_persistence`.
+  > **Post-delivery correction:** `redact_inbound` and `redact_outbound` are
+  > deliberately excluded from `trace_node` wrapping (sync, no I/O — see the
+  > correction note under Task 3) and will NOT appear as spans in Phoenix. Do not
+  > treat their absence as a gap to debug — only the other six named node spans
+  > listed above are expected.
 - An `httpx`/`POST` child span under `memory_retrieval_node` (the embedding call to Ollama).
 - An `asyncpg`/`SELECT` child span under `memory_retrieval_node` and/or `rag_retrieval` (the pgvector query).
 - A `psycopg` span (checkpointer save/load) — likely a sibling of the node spans rather than nested inside one, since the checkpointer runs as part of LangGraph's own state-persistence machinery around node execution, not inside a node body.
