@@ -118,6 +118,28 @@ class TestTraceNode:
     assert spans[0].name == "instance-node"
 
   @pytest.mark.asyncio
+  async def test_does_not_leak_instance_state_onto_wrapper(self, in_memory_tracer):
+    """trace_node must not merge a callable instance's __dict__ onto the wrapper.
+
+    functools.wraps() defaults to WRAPPER_UPDATES=('__dict__',), which merges
+    the wrapped object's __dict__ into the wrapper's __dict__. For a stateful
+    BaseAgentNode instance (carrying attributes like self._agent), that leaks
+    internal state onto the returned wrapper function.
+    """
+
+    class StatefulDummyNode:
+      def __init__(self):
+        self.secret_state = "should-not-leak"
+
+      async def __call__(self, state: dict) -> dict:
+        return {"seen": state}
+
+    traced = trace_node("stateful-node")(StatefulDummyNode())
+
+    assert "secret_state" not in traced.__dict__
+    assert not hasattr(traced, "secret_state")
+
+  @pytest.mark.asyncio
   async def test_preserves_function_return_value(self, in_memory_tracer):
     """trace_node does not alter the wrapped function's return value."""
 

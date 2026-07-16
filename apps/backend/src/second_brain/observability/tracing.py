@@ -87,7 +87,7 @@ def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     # decorations work correctly even when applied before the lifespan starts.
     tracer = trace.get_tracer(__name__)
 
-    @functools.wraps(func)
+    @functools.wraps(func, updated=())
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
       with tracer.start_as_current_span(name):
         return await func(*args, **kwargs)
