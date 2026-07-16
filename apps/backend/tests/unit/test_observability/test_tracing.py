@@ -16,6 +16,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
 
+from second_brain.db.session import engine as db_engine
 from second_brain.observability.tracing import setup_tracing, trace_node
 
 
@@ -39,10 +40,16 @@ class TestSetupTracing:
   def test_calls_register_with_correct_args(self):
     """setup_tracing() calls register with endpoint and auto_instrument=True."""
     mock_provider = MagicMock(spec=TracerProvider)
-    with patch(
-      "second_brain.observability.tracing.register",
-      return_value=mock_provider,
-    ) as mock_register:
+    with (
+      patch(
+        "second_brain.observability.tracing.register",
+        return_value=mock_provider,
+      ) as mock_register,
+      patch("second_brain.observability.tracing.HTTPXClientInstrumentor"),
+      patch("second_brain.observability.tracing.AsyncPGInstrumentor"),
+      patch("second_brain.observability.tracing.SQLAlchemyInstrumentor"),
+      patch("second_brain.observability.tracing.PsycopgInstrumentor"),
+    ):
       result = setup_tracing(phoenix_collection_endpoint="http://localhost:4317")
 
     mock_register.assert_called_once_with(
@@ -51,6 +58,32 @@ class TestSetupTracing:
       auto_instrument=True,
     )
     assert result is mock_provider
+
+  def test_instruments_raw_drivers(self):
+    """setup_tracing() must instrument httpx, asyncpg, SQLAlchemy, and psycopg —
+    the raw drivers auto_instrument=True can't reach (it only activates
+    openinference-instrumentation-* packages)."""
+    with (
+      patch("second_brain.observability.tracing.register"),
+      patch("second_brain.observability.tracing.HTTPXClientInstrumentor") as mock_httpx,
+      patch("second_brain.observability.tracing.AsyncPGInstrumentor") as mock_asyncpg,
+      patch(
+        "second_brain.observability.tracing.SQLAlchemyInstrumentor"
+      ) as mock_sqlalchemy,
+      patch("second_brain.observability.tracing.PsycopgInstrumentor") as mock_psycopg,
+    ):
+      setup_tracing(phoenix_collection_endpoint="http://localhost:4317")
+
+    mock_httpx.return_value.instrument.assert_called_once_with()
+    mock_asyncpg.return_value.instrument.assert_called_once_with()
+    # SQLAlchemy needs the engine instance explicitly — a bare instrument() call
+    # only patches create_engine()/Engine.connect() at the class level, it does NOT
+    # attach an EngineTracer to an engine that already exists (db/session.py
+    # constructs `engine` as a module-level singleton at import time, before
+    # setup_tracing() runs in the FastAPI lifespan), so per-statement write spans
+    # would never appear without passing engine= explicitly.
+    mock_sqlalchemy.return_value.instrument.assert_called_once_with(engine=db_engine)
+    mock_psycopg.return_value.instrument.assert_called_once_with()
 
 
 class TestTraceNode:
@@ -67,6 +100,44 @@ class TestTraceNode:
     spans = in_memory_tracer.get_finished_spans()
     assert len(spans) == 1
     assert spans[0].name == "my-agent-node"
+
+  @pytest.mark.asyncio
+  async def test_wraps_callable_instance_with_async_call(self, in_memory_tracer):
+    """trace_node accepts an object whose __call__ is async, not just a bare func."""
+
+    class DummyNode:
+      async def __call__(self, state: dict) -> dict:
+        return {"seen": state}
+
+    traced = trace_node("instance-node")(DummyNode())
+    result = await traced({"x": 1})
+
+    assert result == {"seen": {"x": 1}}
+    spans = in_memory_tracer.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].name == "instance-node"
+
+  @pytest.mark.asyncio
+  async def test_does_not_leak_instance_state_onto_wrapper(self, in_memory_tracer):
+    """trace_node must not merge a callable instance's __dict__ onto the wrapper.
+
+    functools.wraps() defaults to WRAPPER_UPDATES=('__dict__',), which merges
+    the wrapped object's __dict__ into the wrapper's __dict__. For a stateful
+    BaseAgentNode instance (carrying attributes like self._agent), that leaks
+    internal state onto the returned wrapper function.
+    """
+
+    class StatefulDummyNode:
+      def __init__(self):
+        self.secret_state = "should-not-leak"
+
+      async def __call__(self, state: dict) -> dict:
+        return {"seen": state}
+
+    traced = trace_node("stateful-node")(StatefulDummyNode())
+
+    assert "secret_state" not in traced.__dict__
+    assert not hasattr(traced, "secret_state")
 
   @pytest.mark.asyncio
   async def test_preserves_function_return_value(self, in_memory_tracer):

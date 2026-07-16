@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OTEL Tracing Coverage Fix: DB, Vector-DB, Model, and LangGraph Node Spans</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 780px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+  header { border-bottom: 2px solid #ccc; margin-bottom: 1.5rem; padding-bottom: 1rem; }
+  .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 0.15rem 0.5rem; font-size: 0.85rem; margin-right: 0.5rem; }
+  section.area { margin: 2rem 0; padding-top: 1rem; border-top: 1px solid #ddd; }
+  .quiz { background: #f7f7f7; border-radius: 6px; padding: 1rem; margin-top: 1rem; }
+  .quiz details { margin: 0.75rem 0; }
+  .quiz summary { cursor: pointer; font-weight: 600; }
+  .quiz .answer { margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: #fff; border-left: 3px solid #888; }
+  ul.plain li { margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">diff-review</span>
+  <span class="badge">fix/000-otel-tracing-coverage</span>
+  <span class="badge">2026-07-16</span>
+  <h1>OTEL Tracing Coverage Fix: DB, Vector-DB, Model, and LangGraph Node Spans</h1>
+  <p>Phoenix traces for the Second Brain backend only showed LLM calls made through LangChain — every LangGraph node boundary, every raw httpx/asyncpg/SQLAlchemy/psycopg call, and the checkpointer save/load were invisible black boxes. This change wires up four new OTEL driver instrumentors and finally activates an existing-but-unused <code>trace_node()</code> decorator across both LangGraph graphs, so a <code>/query</code> or <code>/ingest/file</code> request now shows a full nested waterfall: HTTP span → per-node spans → embedding/DB child spans.</p>
+</header>
+
+<section>
+  <h2>Why</h2>
+  <p><code>setup_tracing()</code> (from an earlier change) passed <code>auto_instrument=True</code> to Phoenix's <code>register()</code>, which sounds like it covers everything but actually only auto-activates installed <code>openinference-instrumentation-*</code> packages — in this codebase, just the LangChain instrumentor. Raw driver calls (Ollama embeddings via <code>httpx</code>, pgvector reads via <code>asyncpg</code>, fact/correction writes via SQLAlchemy, LangGraph checkpoint save/load via <code>psycopg</code>) were never instrumented at all, and no generic OTEL instrumentor package for them was even installed.</p>
+<p>Separately, <code>trace_node()</code> — a decorator built specifically to wrap a LangGraph node in a span — had zero call sites anywhere in <code>src/</code>. It existed, had tests, and did nothing, because its type guard (<code>inspect.iscoroutinefunction(func)</code>) rejects every node in this codebase: all nodes are singleton instances of <code>BaseNode</code>/<code>BaseAgentNode</code> subclasses with an <code>async def __call__</code>, not bare async functions, so the guard always saw <code>False</code> and raised.</p>
+<p>The fix is two independent, additive changes with no business-logic impact: instrument the four raw drivers explicitly in <code>setup_tracing()</code>, and fix + wire up <code>trace_node()</code> at every <code>add_node()</code> call site in both graphs.</p>
+</section>
+
+<section class="area">
+  <h2>Letting trace_node wrap real nodes, not just bare functions</h2>
+  <p><code>trace_node()</code>'s guard used <code>inspect.iscoroutinefunction(func)</code>, which is <code>False</code> for a class instance even when its <code>__call__</code> is <code>async def</code> — and every production node (<code>retrieve_from_rag</code>, <code>memory_retrieval_node</code>, etc.) is exactly that kind of instance. The fix widens the guard to also check <code>inspect.iscoroutinefunction(getattr(func, "__call__", None))</code>, so an object with an async <code>__call__</code> passes. The wrapper body itself (<code>await func(*args, **kwargs)</code>) needed no change — it already invokes <code>__call__</code> correctly either way. Sync callables (plain <code>def</code> functions, or instances with a sync <code>__call__</code>) still correctly raise <code>TypeError</code>, because a built-in method-wrapper's <code>__call__</code> also reports <code>False</code> from <code>iscoroutinefunction</code>.</p>
+<p>A second, review-caught bug in this same function: <code>functools.wraps(func)</code> defaults to <code>WRAPPER_UPDATES = ('__dict__',)</code>, which merges the wrapped callable's <code>__dict__</code> onto the wrapper. For a stateful node instance (e.g. one holding <code>self._agent</code>), that silently leaked internal instance attributes onto the plain wrapper function returned by the decorator — a real (if currently harmless) break in encapsulation. Fixed by passing <code>functools.wraps(func, updated=())</code> to skip that merge, with a regression test using a <code>StatefulDummyNode</code> to prove no leakage.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why did the original `trace_node` guard reject every real LangGraph node in this codebase, even though the nodes are all async?</summary>
+      <div class="answer"><strong>Because the nodes are class instances with an async `__call__` method, not bare async functions, and `inspect.iscoroutinefunction(func)` returns False for an instance regardless of whether its `__call__` is async.</strong><br>The fix adds `inspect.iscoroutinefunction(getattr(func, "__call__", None))` as an alternate check specifically to catch this case.</div>
+    </details>
+    <details>
+      <summary>What did `functools.wraps(func)` leak onto the returned wrapper, and why didn't it show up for the original test helper (`DummyNode`)?</summary>
+      <div class="answer"><strong>It merged the wrapped callable instance's `__dict__` (e.g. `self._agent`, `self.secret_state`) onto the wrapper function; the original `DummyNode` test helper had no `__init__` state, so there was nothing to leak.</strong><br>`WRAPPER_UPDATES` defaults to `('__dict__',)` with no existence guard (unlike `__name__`/`__qualname__`, which skip missing attributes); the fix is `functools.wraps(func, updated=())`, verified with a new `StatefulDummyNode` regression test.</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>Instrumenting the raw drivers (httpx, asyncpg, SQLAlchemy, psycopg)</h2>
+  <p>Four new dependencies (<code>opentelemetry-instrumentation-httpx/-asyncpg/-sqlalchemy/-psycopg</code>, all <code>>=0.63b1</code>) were added via <code>uv add</code> and wired into <code>setup_tracing()</code> right after <code>register()</code> returns the provider. Three of the four — httpx, asyncpg, psycopg — patch at the class level (the <code>AsyncClient</code> class, the asyncpg connection class, <code>AsyncConnection.connect</code>), so a bare <code>.instrument()</code> call works regardless of when clients/connections are actually constructed relative to <code>setup_tracing()</code>.</p>
+<p>SQLAlchemy is the exception, and this was the one thing the plan got wrong on first pass (caught by live verification, not by reading source first): a bare <code>SQLAlchemyInstrumentor().instrument()</code> only patches the <code>create_engine()</code> factory and <code>Engine.connect()</code> at the class level — it never retroactively attaches an <code>EngineTracer</code> to an engine object that already exists. Since <code>db/session.py</code> builds <code>engine</code> as a module-level singleton at import time (before <code>setup_tracing()</code> runs in the FastAPI lifespan), the bare call produced zero write spans in round-1 verification. The fix passes the existing engine explicitly: <code>SQLAlchemyInstrumentor().instrument(engine=engine)</code>, importing <code>engine</code> from <code>second_brain.db.session</code>.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why does `HTTPXClientInstrumentor().instrument()` work with no arguments, while `SQLAlchemyInstrumentor().instrument()` needed `engine=engine` added?</summary>
+      <div class="answer"><strong>httpx patches the `AsyncClient` class itself, so any client constructed later picks up instrumentation automatically; SQLAlchemy's bare call only patches the `create_engine()` factory and `Engine.connect()`, which never retroactively attaches a tracer to an engine object that was already constructed before `setup_tracing()` ran.</strong><br>`db/session.py` builds `engine` as a module-level singleton at import time, before the FastAPI lifespan calls `setup_tracing()` — so the class-level patch alone can't reach it; only explicitly passing the existing instance (`instrument(engine=engine)`) attaches per-statement spans to it.</div>
+    </details>
+    <details>
+      <summary>How was the SQLAlchemy `engine=` requirement discovered, and why does that matter for trusting the rest of this diff?</summary>
+      <div class="answer"><strong>It was found via live verification against a running Phoenix instance in round 1 (write spans were missing), not by reading the instrumentor's source ahead of time — it's documented as a 'post-delivery correction' in both the spec and plan.</strong><br>This is why the plan file itself carries blockquote corrections rather than being silently rewritten — the original plan text was wrong, and the fix was proven with real trace evidence, not just code inspection.</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>Wiring trace_node into the query and ingestion graphs</h2>
+  <p>With <code>trace_node()</code> fixed, every async node is now wrapped at its <code>add_node()</code> call site: <code>workflow.add_node("rag_retrieval", trace_node("rag_retrieval")(retrieve_from_rag))</code>, and similarly for <code>memory_retrieval_node</code>, <code>memory_agent</code>, <code>memory_persistence</code>, <code>orchestrator</code>, <code>web_research</code>, <code>synthesis</code> in <code>query_graph.py</code>, and <code>ingest</code> in <code>ingestion_graph.py</code>. Wrapping happens at the graph-wiring site (not inside each node's own file) so the span name always matches the name it's registered under in the graph, and only two files need touching.</p>
+<p>Two nodes are deliberately left unwrapped, and this was a real deviation from the plan's literal text, not a shortcut: <code>pick_file_node</code> (ingestion graph) and <code>redact_inbound</code>/<code>redact_outbound</code> (query graph, PII redaction) are all sync (<code>def __call__</code>, not <code>async def</code>) and do pure in-memory work with no I/O. <code>trace_node</code> only accepts async callables — wrapping any of them as the plan's original snippet literally instructed would raise <code>TypeError</code> at graph-build time and broke 4 pre-existing tests when tried. The implementer diagnosed this from <code>pii_redaction.py</code>'s source before accepting the deviation, and the plan/spec were both updated with 'post-delivery correction' notes rather than silently rewritten.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why are `redact_inbound`, `redact_outbound`, and `pick_file_node` not wrapped in `trace_node`, unlike every other node in the two graphs?</summary>
+      <div class="answer"><strong>They're synchronous (`def __call__`, not `async def`) and do pure in-memory work with no I/O (regex PII redaction / list slicing) — `trace_node` only accepts async callables, so wrapping them raises `TypeError` at graph-build time, and there's nothing worth tracing inside pure CPU work anyway.</strong><br>This was caught as a genuine plan gap during Task 3, not implemented as originally instructed — the plan's literal snippet wrapped all 9 query-graph nodes and would have crashed `build_query_graph()` in production.</div>
+    </details>
+    <details>
+      <summary>If you look at a Phoenix trace for a `/query` request after this change, would you expect to see spans named `redact_inbound` or `redact_outbound`?</summary>
+      <div class="answer"><strong>No — their absence is expected behavior, not a bug to debug.</strong><br>Both the plan and spec carry explicit 'post-delivery correction' notes warning verifiers not to treat their absence as a gap.</div>
+    </details>
+    <details>
+      <summary>Why is each node wrapped at its `add_node()` call site in the graph files, rather than decorating each node at its own definition (e.g. inside `nodes/rag_retrieval.py`)?</summary>
+      <div class="answer"><strong>So the span name can't drift out of sync with the name the node is registered under in the graph, and so the tracing concern stays in the two files that already own graph wiring instead of spreading across every node file.</strong><br>The spec explicitly weighs this against making `BaseNode.__call__` concrete (would require touching ABCs plus ~9 node files) and against per-node-file decoration (risks span-name drift), and picks the `add_node()` site as cheapest and safest.</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>Test infrastructure: taming OTel's global-provider Once guard</h2>
+  <p>OpenTelemetry's SDK protects the global <code>TracerProvider</code> with a <code>Once</code> guard: after the first <code>set_tracer_provider()</code> call in a process, every later call is silently ignored. Several new tests need to swap in an in-memory <code>TracerProvider</code> + <code>InMemorySpanExporter</code> per test to assert which spans got emitted — without resetting that guard between tests, the first test to swap providers permanently locks in its provider for the rest of the pytest session, breaking every other test that also needs to swap.</p>
+<p>This was fixed with an autouse fixture (<code>_reset_otel_tracer_provider</code>) that saves and restores OTel's private <code>_TRACER_PROVIDER</code> and <code>_TRACER_PROVIDER_SET_ONCE._done</code> state around every test. It was initially added twice — once per test directory that needed it (<code>test_graphs/conftest.py</code> from Task 4, <code>test_observability/conftest.py</code> pre-existing) — and a review finding (I2) caught the duplication and hoisted it into the shared <code>tests/unit/conftest.py</code>, deleting both directory-local copies so it applies uniformly via pytest's fixture discovery.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why can't tests just call `trace.set_tracer_provider(my_test_provider)` and then restore the original provider in a `finally` block?</summary>
+      <div class="answer"><strong>Because OTel's `Once` guard makes every `set_tracer_provider()` call after the first one in the process a silent no-op — so the 'restore' call in `finally` doesn't actually restore anything, and the test provider stays locked in for the rest of the session.</strong><br>The fixture instead directly resets the private `_TRACER_PROVIDER` and `_TRACER_PROVIDER_SET_ONCE._done` attributes, which is the only way to actually unlock the guard between tests.</div>
+    </details>
+    <details>
+      <summary>The fixture was originally added in two separate `conftest.py` files. What issue did that cause, and how was it resolved?</summary>
+      <div class="answer"><strong>Near-duplicated fixture code across `test_graphs/conftest.py` and `test_observability/conftest.py`; a code review finding (I2) hoisted the single fixture into the shared `tests/unit/conftest.py` and deleted both directory-level copies.</strong><br>Hoisting to the parent conftest means it applies to all subdirectories via pytest's fixture discovery instead of being maintained in two places that could drift apart.</div>
+    </details>
+  </div>
+</section>
+
+<section>
+  <h2>Challenges &amp; decisions</h2>
+  <ul class="plain">
+    <li>Deviated from the plan's literal Task 3 instructions by NOT wrapping `redact_inbound`/`redact_outbound` in `trace_node` — both are sync, no-I/O PII redaction; wrapping them as literally instructed broke 4 pre-existing tests and would crash `build_query_graph()` in production. Verified independently by reading `pii_redaction.py` before accepting the deviation.</li>
+    <li>Rewrote the plan's literal Task 3 test: the original drove the full graph via `graph.ainvoke()` against a mocked `AsyncPostgresSaver`, which crashed with cascading `TypeError`s from LangGraph's Pregel checkpoint loop (a generic Mock can't faithfully emulate `aget_tuple`/`get_next_version`/etc.). Replaced with direct `graph.nodes[name].ainvoke(state)` calls that isolate just the span-wrapping behavior being tested.</li>
+    <li>Root-caused a full-suite-only test failure (5 tests, invisible when running the new test file alone) to OTel's `Once` guard permanently locking in the first swapped `TracerProvider`; fixed with an autouse reset fixture, later deduplicated across conftest files (review finding I2).</li>
+    <li>Round-1 live verification found `SQLAlchemyInstrumentor().instrument()` (no args, as the plan specified) never emitted write spans — root-caused to the instrumentor needing an explicit `engine=` argument for engines already constructed before `setup_tracing()` runs. Fixed and reverified live in round 2.</li>
+    <li>Review finding I3 raised a plausible concern (psycopg checkpointer spans might have the same silent-no-op failure mode just found for SQLAlchemy) but live investigation confirmed psycopg's instrumentor patches `AsyncConnection.connect` at the class level (looked up fresh per call, unlike SQLAlchemy's one-shot factory wrap) — resolved as a false alarm with no code change, backed by a live Phoenix trace showing the expected spans.</li>
+    <li>Review finding R2-1 caught `functools.wraps(func)` leaking a wrapped callable instance's `__dict__` onto the trace wrapper (inert today, but a real encapsulation break) — fixed with `functools.wraps(func, updated=())` and a new stateful-instance regression test.</li>
+    <li>Two doc-correction findings (I4, then its follow-up R2-2) corrected stale claims in the spec and then the plan — the SQLAlchemy snippet and version number were wrong, and the `redact_inbound`/`redact_outbound` exclusion wasn't documented; both were fixed with additive 'post-delivery correction' blockquotes rather than silently rewriting the original text, to preserve the historical record of what the plan originally said versus what was actually shipped.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Known risks &amp; deferred items</h2>
+  <ul class="plain">
+    <li>M1: `observability/tracing.py` importing `db.session.engine` is a layering nit — a generic observability module reaching into a business-domain module.</li>
+    <li>M2: near-duplicate 'sync, no I/O, not wrapped' comments are repeated across `query_graph.py` and `ingestion_graph.py` instead of being shared.</li>
+    <li>M3/M5: no structural test or guardrail prevents a future async node from being added to either graph without `trace_node` wrapping — relies on developer discipline.</li>
+    <li>M4: a vestigial try/finally `set_tracer_provider` restore remains in `test_ingestion_graph.py`, now fully redundant with the autouse conftest fixture.</li>
+    <li>M6/M12: span-capture test boilerplate (in-memory exporter setup) and dummy-node test helpers are duplicated across multiple test functions instead of hoisted into shared fixtures.</li>
+    <li>M7: a hand-rolled `base_state` dict in one test has drifted from the `make_state()` factory (missing `context_used`).</li>
+    <li>M8: the span-name string literal is retyped twice per `add_node()` call site (8 occurrences total) instead of derived once.</li>
+    <li>M9: the widened `is_async` guard in `trace_node` is not verified against a `functools.partial`-wrapped callable instance (no such node exists today, so untested).</li>
+    <li>M10: `trace_node`'s docstring/usage example still only shows the bare-function form, not the callable-instance form that all 8 production nodes actually use.</li>
+    <li>M11: no test covers the negative case of the widened contract — a sync callable instance (not just a sync bare function) should still raise `TypeError`.</li>
+    <li>M13: `_reset_otel_tracer_provider` is now autouse across all 226 unit tests (hoisted for DRY reasons) rather than scoped only to the ~3 modules that actually swap tracer providers.</li>
+  </ul>
+</section>
+
+</body>
+</html>

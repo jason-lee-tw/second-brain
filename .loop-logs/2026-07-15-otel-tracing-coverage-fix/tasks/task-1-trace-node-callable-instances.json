@@ -1,0 +1,9 @@
+{
+  "task_id": "task-1-trace-node-callable-instances",
+  "plan": "docs/superpowers/plans/2026-07-15-otel-tracing-coverage-fix.md",
+  "spec": "docs/superpowers/specs/2026-07-15-otel-tracing-coverage-fix.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-1-trace-node-callable-instances",
+  "completed_steps": ["tdd-loop-complete"]
+}

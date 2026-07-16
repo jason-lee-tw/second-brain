@@ -123,3 +123,41 @@ async def test_graph_terminates_when_all_files_done():
 
   assert result["files"] == []
   assert result["retry_queue"] == []
+
+
+@pytest.mark.asyncio
+async def test_graph_emits_span_for_ingest_node_but_not_pick_file():
+  """The 'ingest' node must emit a span; 'pick_file' (sync, no I/O) must not."""
+  from opentelemetry import trace
+  from opentelemetry.sdk.trace import TracerProvider
+  from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+  from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+    InMemorySpanExporter,
+  )
+
+  exporter = InMemorySpanExporter()
+  provider = TracerProvider()
+  provider.add_span_processor(SimpleSpanProcessor(exporter))
+  original_provider = trace.get_tracer_provider()
+  trace.set_tracer_provider(provider)
+
+  async def fake_ingest_node(state):
+    filename = state["in_progress"]
+    return {
+      "processed": state["processed"] + [filename],
+      "in_progress": None,
+      "retry_queue": [],
+    }
+
+  try:
+    with patch(_PATCH_TARGET, fake_ingest_node):
+      from second_brain.graphs.ingestion_graph import build_ingestion_graph
+
+      graph = build_ingestion_graph()
+      await graph.ainvoke(_make_state(files=["a.md"]))
+  finally:
+    trace.set_tracer_provider(original_provider)
+
+  span_names = [s.name for s in exporter.get_finished_spans()]
+  assert "ingest" in span_names
+  assert "pick_file" not in span_names

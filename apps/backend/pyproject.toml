@@ -31,6 +31,10 @@ dependencies = [
     "langgraph-checkpoint-postgres>=2.0.0",
     "uuid6>=2024.0.0",
     "openinference-instrumentation-langchain>=0.1.66",
+    "opentelemetry-instrumentation-httpx>=0.63b1",
+    "opentelemetry-instrumentation-asyncpg>=0.63b1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.63b1",
+    "opentelemetry-instrumentation-psycopg>=0.63b1",
 ]
 
 [project.optional-dependencies]

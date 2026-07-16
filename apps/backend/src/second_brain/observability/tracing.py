@@ -5,8 +5,14 @@ import inspect
 from typing import Any, Callable
 
 from opentelemetry import trace
+from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from phoenix.otel import register
+
+from second_brain.db.session import engine
 
 
 def setup_tracing(
@@ -28,14 +34,26 @@ def setup_tracing(
       The configured ``TracerProvider``, also set as the global provider via
       ``opentelemetry.trace.set_tracer_provider()``.
   """
-  return register(
+  provider = register(
     project_name="second-brain",
     endpoint=phoenix_collection_endpoint,
     # auto_instrument=True causes register() to auto-discover and activate all
     # installed openinference-instrumentation-* packages; no separate
-    # LangChainInstrumentor().instrument() call needed.
+    # LangChainInstrumentor().instrument() call needed. It does NOT cover raw
+    # driver calls (httpx, asyncpg, SQLAlchemy, psycopg) — those need their own
+    # instrumentor, wired up explicitly below.
     auto_instrument=True,
   )
+  HTTPXClientInstrumentor().instrument()
+  AsyncPGInstrumentor().instrument()
+  # engine= is required: a bare instrument() call only patches the create_engine()
+  # factory and Engine.connect() at the class level. It never attaches an
+  # EngineTracer to an engine that already exists — and db/session.py constructs
+  # `engine` as a module-level singleton at import time, before setup_tracing()
+  # runs in the FastAPI lifespan — so write spans would never appear otherwise.
+  SQLAlchemyInstrumentor().instrument(engine=engine)
+  PsycopgInstrumentor().instrument()
+  return provider
 
 
 def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -59,14 +77,17 @@ def trace_node(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
   """
 
   def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-    if not inspect.iscoroutinefunction(func):
+    is_async = inspect.iscoroutinefunction(func) or inspect.iscoroutinefunction(
+      getattr(func, "__call__", None)
+    )
+    if not is_async:
       raise TypeError(f"trace_node can only decorate async functions, got: {func!r}")
     # Acquired once per decoration (not per call). Before setup_tracing() runs this
     # returns a ProxyTracer that lazily forwards to the real provider — module-level
     # decorations work correctly even when applied before the lifespan starts.
     tracer = trace.get_tracer(__name__)
 
-    @functools.wraps(func)
+    @functools.wraps(func, updated=())
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
       with tracer.start_as_current_span(name):
         return await func(*args, **kwargs)

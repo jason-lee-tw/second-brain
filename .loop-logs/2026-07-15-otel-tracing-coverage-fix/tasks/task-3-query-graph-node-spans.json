@@ -1,0 +1,11 @@
+{
+  "task_id": "task-3-query-graph-node-spans",
+  "plan": "docs/superpowers/plans/2026-07-15-otel-tracing-coverage-fix.md",
+  "spec": "docs/superpowers/specs/2026-07-15-otel-tracing-coverage-fix.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-3-query-graph-node-spans",
+  "completed_steps": ["tdd-loop-complete"],
+  "depends_on": ["task-1-trace-node-callable-instances"],
+  "note": "Deviated from literal plan: left redact_inbound/redact_outbound unwrapped (verified sync __call__, no I/O — same exception class as pick_file_node). Rewrote plan's literal test to invoke nodes directly via graph.nodes[name].ainvoke() instead of graph.ainvoke() with a mocked checkpointer, which crashed with cascading TypeErrors."
+}
