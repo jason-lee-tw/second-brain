@@ -1,0 +1,10 @@
+{
+  "task_id": "task-5-full-verification-pass",
+  "plan": "docs/superpowers/plans/2026-07-15-otel-tracing-coverage-fix.md",
+  "spec": "docs/superpowers/specs/2026-07-15-otel-tracing-coverage-fix.md",
+  "status": "delegated_to_stage2",
+  "attempt": 0,
+  "worktree": null,
+  "completed_steps": [],
+  "note": "No files changed by this task per plan; it is lint/format/type-check/test-unit plus live Phoenix trace observation against spec ACs. This is exactly what Stage 2 VERIFY (stage-verify.md, verifying-implementation skill) performs, so it is not spawned as a Stage 1 worktree task."
+}

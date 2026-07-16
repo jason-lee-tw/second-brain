@@ -1,0 +1,11 @@
+{
+  "task_id": "task-4-ingestion-graph-node-span",
+  "plan": "docs/superpowers/plans/2026-07-15-otel-tracing-coverage-fix.md",
+  "spec": "docs/superpowers/specs/2026-07-15-otel-tracing-coverage-fix.md",
+  "status": "completed",
+  "attempt": 1,
+  "worktree": ".worktrees/task-4-ingestion-graph-node-span",
+  "completed_steps": ["tdd-loop-complete"],
+  "depends_on": ["task-1-trace-node-callable-instances"],
+  "note": "Added apps/backend/tests/unit/test_graphs/conftest.py: autouse fixture resetting OTel's private TracerProvider Once-guard between tests (mirrors identical fixture in test_observability/conftest.py) — needed because this test swaps the global tracer provider."
+}
