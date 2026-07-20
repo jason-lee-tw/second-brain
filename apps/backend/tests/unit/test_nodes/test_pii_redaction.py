@@ -1,5 +1,5 @@
 # apps/backend/tests/unit/test_nodes/test_pii_redaction.py
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from second_brain.nodes.pii_redaction import redact_inbound, redact_outbound
 from tests.unit.conftest import make_state
@@ -52,3 +52,24 @@ def test_redact_outbound_empty_answer_unchanged():
     state = make_state(final_answer="")
     result = redact_outbound(state)
     assert result["final_answer"] == ""
+
+
+def test_redact_outbound_appends_redacted_aimessage():
+    state = make_state(
+        final_answer="Based on the context, Dr. Sarah Connor at s.connor@clinic.com."
+    )
+    result = redact_outbound(state)
+
+    messages = result["messages"]
+    assert len(messages) == 1
+    ai_message = messages[0]
+    assert isinstance(ai_message, AIMessage)
+
+    # The AIMessage content must match final_answer exactly — same redacted string.
+    assert ai_message.content == result["final_answer"]
+
+    # Raw PII must be absent from both the message and final_answer.
+    assert "Sarah Connor" not in ai_message.content
+    assert "s.connor@clinic.com" not in ai_message.content
+    assert "Sarah Connor" not in result["final_answer"]
+    assert "s.connor@clinic.com" not in result["final_answer"]

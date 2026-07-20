@@ -190,12 +190,14 @@ async def test_ac10_null_session_id_creates_new_thread_uuid7_continues():
     from second_brain.api.schemas import QueryRequest, QueryResponse
 
     call_count = [0]
+    synthesis_inputs: list[str] = []
 
     async def mock_orch(prompt):
         return _make_routing_mock("neither")
 
     async def mock_synth(prompt):
         call_count[0] += 1
+        synthesis_inputs.append(prompt)
         if call_count[0] == 1:
             return _make_synthesis_mock("Turn 1 answer: I see you.")
         else:
@@ -229,3 +231,11 @@ async def test_ac10_null_session_id_creates_new_thread_uuid7_continues():
     assert "Turn 2 answer" in response2.answer
     # Both LLM calls were made (one per turn)
     assert call_count[0] == 2
+
+    # The turn-2 synthesis prompt must include turn-1's answer in its
+    # conversation history — proving the assistant's prior answer was
+    # persisted to messages (via redact_outbound) and is visible on the
+    # next turn.
+    assert len(synthesis_inputs) == 2
+    turn_2_prompt = synthesis_inputs[1]
+    assert "Turn 1 answer: I see you." in turn_2_prompt
