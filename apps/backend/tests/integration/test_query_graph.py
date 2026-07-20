@@ -16,8 +16,10 @@ Requirements:
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import psycopg
 import pytest
 from langchain_core.messages import HumanMessage
+from psycopg import sql
 
 from second_brain.config import settings
 from second_brain.graphs.query_graph import build_query_graph
@@ -26,34 +28,6 @@ from second_brain.graphs.query_graph import build_query_graph
 # the caller must pass a clean psycopg-compatible DSN (same convention as
 # second_brain.api.routers.query._get_graph).
 _POSTGRES_URL = settings.database_url.replace("+psycopg2", "")
-
-
-async def _ensure_checkpoint_tables_exist() -> None:
-    """Work around a bug in query_graph.build_query_graph().
-
-    build_query_graph() runs its AsyncPostgresSaver.setup() against a connection
-    pulled from an AsyncConnectionPool, whose connections default to
-    autocommit=False. AsyncPostgresSaver.setup() issues `CREATE INDEX
-    CONCURRENTLY`, which Postgres refuses to run inside a transaction block —
-    so on a database where the checkpoint tables don't exist yet, the very
-    first build_query_graph() call raises `psycopg.errors.ActiveSqlTransaction`.
-
-    AsyncPostgresSaver.from_conn_string() opens its connection with
-    autocommit=True, so running setup() through it once succeeds and leaves a
-    fully-applied row in `checkpoint_migrations`. Every later setup() call
-    (including the one build_query_graph() performs against the buggy pool)
-    then finds nothing left to migrate and is a no-op. This is a test-only
-    workaround; the production bug in query_graph.py is unaffected.
-    """
-    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-    async with AsyncPostgresSaver.from_conn_string(_POSTGRES_URL) as saver:
-        await saver.setup()
-
-
-@pytest.fixture(autouse=True)
-async def _checkpoint_tables_ready():
-    await _ensure_checkpoint_tables_exist()
 
 
 def _base_input(session_id: str, message: str) -> dict:
@@ -150,8 +124,7 @@ async def test_ac6_pii_redacted_in_final_answer():
 
     # LLM synthesis returns an answer that contains PII
     pii_in_answer = (
-        "Based on the context, Dr. Marcus Holt at m.holt@hospital.org "
-        "is your contact."
+        "Based on the context, Dr. Marcus Holt at m.holt@hospital.org is your contact."
     )
 
     with (
@@ -239,3 +212,42 @@ async def test_ac10_null_session_id_creates_new_thread_uuid7_continues():
     assert len(synthesis_inputs) == 2
     turn_2_prompt = synthesis_inputs[1]
     assert "Turn 1 answer: I see you." in turn_2_prompt
+
+
+# ---------------------------------------------------------------------------
+# Regression: build_query_graph() must succeed against a schema that has
+# never had LangGraph checkpoint tables created (fresh database/schema).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def _isolated_schema_dsn():
+    """Yield a DSN pointing at a brand-new, empty Postgres schema.
+
+    Proves build_query_graph() can run AsyncPostgresSaver.setup() (which issues
+    `CREATE INDEX CONCURRENTLY`) from a cold start, with no pre-existing
+    checkpoint tables and no other test having already run setup() against
+    this schema.
+    """
+    schema = f"test_fresh_{uuid.uuid4().hex}"
+
+    with psycopg.connect(_POSTGRES_URL, autocommit=True) as conn:
+        conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+
+    schema_dsn = f"{_POSTGRES_URL}?options=-c%20search_path%3D{schema}"
+
+    try:
+        yield schema_dsn
+    finally:
+        with psycopg.connect(_POSTGRES_URL, autocommit=True) as conn:
+            conn.execute(
+                sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema))
+            )
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_build_query_graph_succeeds_against_fresh_schema(_isolated_schema_dsn):
+    """build_query_graph() must not fail with ActiveSqlTransaction on a fresh schema."""
+    graph = await build_query_graph(_isolated_schema_dsn)
+    assert graph is not None

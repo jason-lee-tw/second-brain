@@ -39,7 +39,9 @@ async def build_query_graph(postgres_url: str):
     Call once at app startup; the returned compiled graph is thread-safe for
     concurrent use.
     """
-    pool = AsyncConnectionPool(conninfo=postgres_url, open=False)
+    pool = AsyncConnectionPool(
+        conninfo=postgres_url, open=False, kwargs={"autocommit": True}
+    )
     await pool.open()
 
     checkpointer = AsyncPostgresSaver(pool)

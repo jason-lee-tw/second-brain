@@ -24,3 +24,8 @@ async def test_build_query_graph_returns_compiled_graph():
 
     # Compiled graph must have an ainvoke method
     assert hasattr(graph, "ainvoke")
+
+    # Pool must open every connection in autocommit mode — AsyncPostgresSaver's
+    # setup() issues CREATE INDEX CONCURRENTLY, which Postgres refuses to run
+    # inside a transaction block.
+    assert MockPool.call_args.kwargs["kwargs"] == {"autocommit": True}
