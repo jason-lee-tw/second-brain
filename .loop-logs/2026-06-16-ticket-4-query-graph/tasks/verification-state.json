@@ -1,0 +1,5 @@
+{
+  "rounds_completed": 2,
+  "last_outcome": "pass",
+  "notes": "Round 2 (post-fix re-verify): rebuilt backend with F1-F4 merged. Live proof F2's AIMessage-persistence fix works (assistant recalled its own '51' answer to '17*3' on the next turn, a value never present in any human message). No Postgres transaction errors across calls (F1). Full regression: lint clean, 137 unit tests, 7 integration tests (incl. new F1 fresh-schema regression test) all pass."
+}

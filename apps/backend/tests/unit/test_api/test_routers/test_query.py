@@ -144,9 +144,7 @@ async def test_query_graph_error_does_not_leak_exception_detail_to_client():
     (which may embed the Postgres DSN, including credentials) to the client."""
     mock_graph = AsyncMock()
     mock_graph.ainvoke = AsyncMock(
-        side_effect=Exception(
-            "connection to postgresql://user:supersecret@host failed"
-        )
+        side_effect=Exception("connection to postgresql://user:supersecret@host failed")
     )
 
     with patch(

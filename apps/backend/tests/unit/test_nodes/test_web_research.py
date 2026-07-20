@@ -16,9 +16,7 @@ async def test_returns_web_results():
             "second_brain.nodes.web_research.tavily_search",
             new_callable=AsyncMock,
         ) as mock_search,
-        patch(
-            "second_brain.nodes.web_research.asyncio.sleep", new_callable=AsyncMock
-        ),
+        patch("second_brain.nodes.web_research.asyncio.sleep", new_callable=AsyncMock),
     ):
         mock_search.return_value = [
             {
@@ -72,9 +70,7 @@ async def test_returns_empty_list_when_no_results():
             "second_brain.nodes.web_research.tavily_search",
             new_callable=AsyncMock,
         ) as mock_search,
-        patch(
-            "second_brain.nodes.web_research.asyncio.sleep", new_callable=AsyncMock
-        ),
+        patch("second_brain.nodes.web_research.asyncio.sleep", new_callable=AsyncMock),
     ):
         mock_search.return_value = []
 
@@ -93,14 +89,10 @@ async def test_searches_with_last_message_content_and_max_results_three():
             "second_brain.nodes.web_research.tavily_search",
             new_callable=AsyncMock,
         ) as mock_search,
-        patch(
-            "second_brain.nodes.web_research.asyncio.sleep", new_callable=AsyncMock
-        ),
+        patch("second_brain.nodes.web_research.asyncio.sleep", new_callable=AsyncMock),
     ):
         mock_search.return_value = []
 
         await search_web(state)
 
-    mock_search.assert_called_once_with(
-        "Rust 2025 edition features?", max_results=3
-    )
+    mock_search.assert_called_once_with("Rust 2025 edition features?", max_results=3)

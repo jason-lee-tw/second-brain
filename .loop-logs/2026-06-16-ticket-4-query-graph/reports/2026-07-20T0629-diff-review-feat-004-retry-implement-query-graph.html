@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ticket 4 — Full /query Pipeline: PII, Routing, RAG, Web Research, Synthesis, Session Continuity</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 780px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+  header { border-bottom: 2px solid #ccc; margin-bottom: 1.5rem; padding-bottom: 1rem; }
+  .badge { display: inline-block; background: #eee; border-radius: 4px; padding: 0.15rem 0.5rem; font-size: 0.85rem; margin-right: 0.5rem; }
+  section.area { margin: 2rem 0; padding-top: 1rem; border-top: 1px solid #ddd; }
+  .quiz { background: #f7f7f7; border-radius: 6px; padding: 1rem; margin-top: 1rem; }
+  .quiz details { margin: 0.75rem 0; }
+  .quiz summary { cursor: pointer; font-weight: 600; }
+  .quiz .answer { margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: #fff; border-left: 3px solid #888; }
+  ul.plain li { margin-bottom: 0.5rem; }
+  @media (prefers-color-scheme: dark) {
+    .badge { background: #3a3a3a; }
+    .quiz { background: #2a2a2a; }
+    .quiz .answer { background: #1e1e1e; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">diff-review</span>
+  <span class="badge">feat/004-retry-implement-query-graph</span>
+  <span class="badge">2026-07-20</span>
+  <h1>Ticket 4 — Full /query Pipeline: PII, Routing, RAG, Web Research, Synthesis, Session Continuity</h1>
+  <p>This diff wires up the complete POST /query flow for the Second Brain: an eight-node LangGraph that redacts PII on the way in and out, routes each query via an LLM orchestrator, fans out to RAG and/or web search, synthesizes an answer with a confidence score, and persists conversation state per-session in Postgres via LangGraph checkpointing. It was built as 12 TDD tasks (11 new modules plus the graph wiring and router registration), then hardened through two rounds of live-system verification and review that caught and fixed two release-blocking bugs and two important ones before merge.</p>
+</header>
+
+<section>
+  <h2>Why</h2>
+  <p>Ticket 4 is the backbone of the "Second Brain": every other capability (memory, corrections, ingestion feedback loops) depends on a working query pipeline that can hold a multi-turn conversation, decide where to look for an answer, and never leak PII either into the LLMs it calls or into what it stores. The spec called for this as a single LangGraph (SecondBrainState) kept deliberately separate from the ingestion graph, with session continuity implemented through LangGraph's own Postgres checkpointer rather than a bespoke chat_history table read/write path.</p>
+  <p>The task was decomposed into 12 small, mostly-parallel TDD units (state shape, PII service, PII nodes, memory stub, orchestrator, RAG node, web node, synthesis node, graph wiring, API schema/router, main.py registration, integration tests) so that independent nodes could be built and tested against a shared <code>make_state()</code> fixture without waiting on each other. The real engineering pressure showed up at integration time: two individually-correct-looking pieces (the checkpointer's connection pool defaults, and the outbound node's return shape) combined to break the system in ways that only appeared once you booted a real Postgres and ran an actual second turn — exactly the class of bug unit tests with mocks cannot catch, which is why a live-system verification pass was mandatory before calling this done.</p>
+</section>
+
+<section class="area">
+  <h2>State shape and message-history contract (Task 1)</h2>
+  <p><code>SecondBrainState</code> is the single TypedDict that every node reads and writes. Its most consequential design decision is that <code>messages</code> is <code>Annotated[list[BaseMessage], add_messages]</code> — LangGraph's built-in reducer that appends rather than overwrites. That one annotation is what makes "session continuity" possible at all: a node can return <code>{"messages": [new_msg]}</code> and LangGraph merges it into the existing checkpoint history instead of replacing the whole conversation.</p>
+  <p>The rest of the state (<code>rag_results</code>, <code>web_results</code>, <code>retrieved_memory</code>, <code>routing_decision</code>, <code>confidence</code>, <code>is_uncertain</code>, <code>awaiting_correction</code>, etc.) is plain overwrite-on-return, matching the per-turn scratch-pad role those fields play versus the cross-turn persistent role <code>messages</code> plays. A shared <code>make_state()</code> factory in <code>tests/unit/conftest.py</code> gave every subsequent node test a consistent, override-friendly state object to build on, which is what let 11 independent node/service modules be developed in parallel against the same contract.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why does <code>messages</code> use <code>Annotated[list[BaseMessage], add_messages]</code> instead of a plain <code>list[BaseMessage]</code>?</summary>
+      <div class="answer"><strong>So LangGraph appends new messages to the checkpoint instead of overwriting the whole history on each node's return value.</strong><br>Every node only returns the message(s) it produced (e.g. one HumanMessage or one AIMessage); the <code>add_messages</code> reducer is what merges that into the full, persisted conversation — required for AC-10 session continuity.</div>
+    </details>
+    <details>
+      <summary>What problem does the shared <code>make_state()</code> conftest factory solve for this ticket's parallel-task structure?</summary>
+      <div class="answer"><strong>It lets all 11+ node/service test files construct a valid SecondBrainState via keyword overrides instead of each hand-rolling the full 14-field dict, keeping tests decoupled from state-shape changes.</strong><br>Tasks 2-12 ran largely in parallel; a shared factory with sane defaults meant a task only had to specify the fields it cared about, reducing merge friction across sibling worktrees.</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>PII guardrail — service and inbound/outbound nodes (Tasks 2-3)</h2>
+  <p><code>services/pii.py</code> wraps Presidio's <code>AnalyzerEngine</code> + <code>AnonymizerEngine</code> (spaCy <code>en_core_web_lg</code> under the hood) as a single <code>redact_pii(text) -> str</code> function, replacing detected entities with typed placeholders (<code>[NAME]</code>, <code>[EMAIL]</code>, <code>[PHONE]</code>, <code>[CARD]</code>, etc.). The analyzer/anonymizer are module-level singletons because spaCy model loading is expensive and should happen once per process, not per call.</p>
+  <p><code>nodes/pii_redaction.py</code> applies this at the two boundaries the spec requires: <code>redact_inbound</code> scrubs <code>messages[-1].content</code> before any LLM node sees it (AC-5), and <code>redact_outbound</code> scrubs <code>final_answer</code> before it's persisted (AC-6). A subtlety in <code>redact_inbound</code>: it constructs a new <code>HumanMessage</code> with the same id as the original, so LangGraph's <code>add_messages</code> reducer replaces that message in place rather than appending a duplicate — the redacted version is what ends up in the checkpoint, the raw PII-bearing version never is.</p>
+  <p>The outbound node evolved during review (see F2 below): it now also builds an <code>AIMessage</code> from the same redacted string used for <code>final_answer</code>, computed exactly once, guaranteeing the checkpointed message history and the API response answer can never diverge — and that raw, unredacted PII is never even transiently present in <code>messages</code>.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why does <code>redact_inbound</code> preserve the original message's <code>id</code> when constructing the redacted replacement?</summary>
+      <div class="answer"><strong>So LangGraph's add_messages reducer treats it as an update to the existing message rather than appending a new one, keeping the raw PII version out of the checkpoint.</strong><br>add_messages matches on message id; reusing <code>last_message.id</code> causes an in-place replace instead of a duplicate append.</div>
+    </details>
+    <details>
+      <summary>Why is redaction computed once inside <code>redact_outbound</code> and used for both <code>final_answer</code> and the new <code>AIMessage</code>, rather than redacting twice or redacting only one?</summary>
+      <div class="answer"><strong>To guarantee the response returned to the API caller and the message persisted to the checkpoint are always identical and both fully redacted — no risk of one path leaking unredacted PII.</strong><br>This was a review fix (F2): the original code never built an AIMessage at all, so computing the redacted string once and reusing it for both outputs closes both the missing-append bug and any redaction-divergence risk.</div>
+    </details>
+    <details>
+      <summary>Why are <code>AnalyzerEngine</code> and <code>AnonymizerEngine</code> created as module-level singletons instead of per-call instances?</summary>
+      <div class="answer"><strong>Because spaCy's en_core_web_lg model load is expensive; creating it once per process avoids paying that cost on every request.</strong><br>services/pii.py comments explicitly flag this: "spaCy load is expensive, do it once."</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>Orchestrator routing and memory stub (Tasks 4-5)</h2>
+  <p><code>nodes/memory_retrieval.py</code> is intentionally a stub for this ticket — it always returns <code>{"retrieved_memory": []}</code>. This is a deliberate placeholder so the graph's shape (and everything downstream that reads <code>retrieved_memory</code>) is stable now and Ticket 5 can drop in the real pgvector similarity search against <code>learned_facts</code>/<code>model_corrections</code> without touching the graph wiring.</p>
+  <p><code>nodes/orchestrator.py</code> uses <code>claude-haiku-4-5</code> with <code>with_structured_output</code> to force a <code>Literal["rag", "web", "both", "neither"]</code> decision, given the current query plus whatever <code>retrieved_memory</code> context exists (currently always empty). This decision drives the fan-out in the graph: <code>rag</code>/<code>web</code>/<code>both</code> route to one or both retrieval branches in parallel via <code>Send</code>; <code>neither</code> skips retrieval entirely and goes straight to synthesis — important for latency on purely conversational turns.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why is <code>retrieve_memory</code> a stub that always returns an empty list in this ticket, rather than left out of the graph entirely?</summary>
+      <div class="answer"><strong>So the node is wired into the graph now with the correct interface, letting Ticket 5 swap in the real cosine-similarity implementation with zero graph-structure changes.</strong><br>The plan explicitly frames this as forward compatibility: "wires the node into the graph so Ticket 5 can drop in the real implementation with no graph changes."</div>
+    </details>
+    <details>
+      <summary>What determines whether a query skips RAG/web retrieval entirely, and why does that matter for performance?</summary>
+      <div class="answer"><strong>The orchestrator's routing_decision — when it's 'neither', the graph's conditional edge routes straight to synthesis, skipping both retrieval branches, avoiding unnecessary Ollama/Postgres/Tavily calls for purely conversational turns.</strong><br><code>_route_retrieval</code> in query_graph.py returns the string "synthesis" (not a Send) for the neither case, which LangGraph interprets as a direct edge rather than a fan-out.</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>RAG retrieval and web research nodes (Tasks 6-7)</h2>
+  <p><code>nodes/rag_retrieval.py</code> embeds the current query via the shared <code>embed_text</code> service (Ollama), then runs a cosine-similarity query (<code>embedding &lt;=&gt; $1</code>, i.e. pgvector's distance operator, converted to <code>1 - distance</code> as score) against <code>document_chunks</code>, returning the top 5. It went through a real evolution during review: the plan's original version opened a brand-new <code>asyncpg.connect()</code> per request; the shipped version uses a lazily-created, module-level <code>asyncpg.Pool</code> (with <code>register_vector</code> wired through the pool's <code>init</code> callback so every physical connection gets vector type support), plus a <code>shutdown()</code> hook wired into <code>main.py</code>'s lifespan.</p>
+  <p><code>nodes/web_research.py</code> wraps the existing <code>AsyncTavilyClient</code> service, requesting top-3 results, with a fixed <code>asyncio.sleep(1)</code> before each call as a simple (not globally coordinated) rate limit — a deliberate design choice to keep the service a plain reusable Tavily wrapper while the node owns graph-specific throttling policy.</p>
+  <p>Both nodes independently need a bare <code>postgresql://</code> DSN, since asyncpg/Tavily don't understand the SQLAlchemy <code>+psycopg2</code> driver suffix present in <code>settings.database_url</code> — this suffix-stripping is currently duplicated in three places (flagged as deferred issue F5, not fixed in this ticket).</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>What performance problem did the review flag in the original <code>retrieve_from_rag</code>, and how was it fixed?</summary>
+      <div class="answer"><strong>It opened a brand-new asyncpg connection (full TCP + auth handshake) on every RAG-routed request; fixed by introducing a lazily-created, module-level asyncpg.Pool reused across requests, with shutdown() wired into the app lifespan.</strong><br>This is finding F4 (important) in round-1 review — apps/backend/src/second_brain/nodes/rag_retrieval.py now uses <code>_get_pool()</code> / <code>_pool</code> instead of a per-call <code>asyncpg.connect()</code>.</div>
+    </details>
+    <details>
+      <summary>Is the web-research rate limiter (<code>asyncio.sleep(1)</code>) a true global rate limit across concurrent requests?</summary>
+      <div class="answer"><strong>No — it's a per-call local sleep inside the node, not a shared/global limiter, so concurrent requests can still exceed 1 call/second in aggregate; this is a known, deferred minor issue (F6).</strong><br>Each invocation of search_web sleeps 1 second before its own Tavily call, but nothing coordinates across simultaneous requests — it only throttles a single call's own pacing.</div>
+    </details>
+    <details>
+      <summary>Why does register_vector get passed as the <code>init</code> callback to <code>asyncpg.create_pool</code> rather than called once after connecting?</summary>
+      <div class="answer"><strong>Because register_vector needs to run against every physical connection the pool opens (not just the first), and asyncpg's pool init callback contract runs once per new connection.</strong><br>Comment in rag_retrieval.py: "register_vector's signature is (conn, schema='public'), matching asyncpg's per-connection init callback contract — it runs once for every new physical connection the pool opens."</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>Synthesis node — confidence scoring and history trimming (Task 8)</h2>
+  <p><code>nodes/synthesis.py</code> calls <code>claude-sonnet-4-6</code> with structured output (<code>final_answer</code>, <code>confidence</code> bounded 0.0-1.0, <code>reasoning</code>) over a prompt assembled from <code>rag_results</code>, <code>web_results</code>, <code>retrieved_memory</code>, and the last 10 messages (excluding the current query itself, via <code>messages[-10:-1]</code>) so the LLM has bounded context regardless of how long the conversation has grown.</p>
+  <p>The confidence handling has a deliberate special case: when <code>routing_decision == "neither"</code> (purely conversational turns with no retrieved context to ground the answer), the LLM's raw confidence is floored at 0.5 rather than left as-is — the spec's rationale is that a low-context conversational answer shouldn't automatically read as "the system doesn't know," but it also shouldn't claim false certainty, so <code>is_uncertain</code> (confidence &lt; 0.7) can still end up true even after the floor.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why does synthesis trim conversation history to <code>messages[-10:-1]</code> rather than passing the full history or <code>messages[-10:]</code>?</summary>
+      <div class="answer"><strong>To bound the prompt size regardless of conversation length, and to exclude the current query from the 'history' block since it's already included separately as the 'Current question'.</strong><br>history_messages = state["messages"][-10:-1] deliberately drops the last element (the current query) to avoid duplicating it in both the history and query sections of the prompt.</div>
+    </details>
+    <details>
+      <summary>If the LLM returns confidence=0.3 on a 'neither'-routed turn, what is the final confidence and is_uncertain value?</summary>
+      <div class="answer"><strong>confidence becomes 0.5 (floored) and is_uncertain is True (0.5 &lt; 0.7 threshold).</strong><br>The neither-routing floor only raises confidence to a minimum of 0.5, it doesn't push it above the 0.7 uncertainty threshold, so low-confidence conversational answers still get flagged uncertain.</div>
+    </details>
+    <details>
+      <summary>Does the confidence floor for 'neither' routing ever lower a high LLM-reported confidence?</summary>
+      <div class="answer"><strong>No — it's a max(), so it only raises confidence when the LLM reported something below 0.5; a reported confidence of 0.99 stays 0.99.</strong><br><code>confidence = max(confidence, _NEITHER_CONFIDENCE_FLOOR)</code> — this is a floor, not a clamp or override.</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>Graph wiring, checkpointing, and the autocommit bug (Task 9 + F1)</h2>
+  <p><code>graphs/query_graph.py</code> assembles all seven nodes into a <code>StateGraph(SecondBrainState)</code>: a linear prefix (<code>redact_inbound → retrieve_memory → orchestrator</code>), a conditional fan-out from the orchestrator using <code>Send</code> for parallel <code>rag_retrieval</code>/<code>web_research</code> branches (or a direct edge to <code>synthesis</code> for "neither"), both branches converging on <code>synthesis</code>, then <code>redact_outbound → END</code>. Session continuity is provided by <code>AsyncPostgresSaver</code> wrapping an <code>AsyncConnectionPool</code>, keyed by <code>thread_id</code> = <code>session_id</code> at invocation time.</p>
+  <p>The most consequential bug of the whole ticket (F1, blocking) lived in exactly one line here: <code>AsyncConnectionPool(...)</code> was created without <code>kwargs={"autocommit": True}</code>. Postgres refuses <code>CREATE INDEX CONCURRENTLY</code> — which <code>AsyncPostgresSaver.setup()</code> runs to create its own checkpoint tables — inside a transaction block. On any database that already had checkpoint tables (e.g. a dev machine reused across sessions), <code>setup()</code> is a no-op and the bug is invisible; on a genuinely fresh database it breaks graph construction outright. Task 12's integration tests actually hit this first and worked around it locally in the test fixture (pre-creating tables via an autocommit connection) while explicitly flagging the real fix for the review loop — which then made the one-line change (<code>kwargs={"autocommit": True}</code>) and deleted the workaround.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>What exactly caused <code>build_query_graph()</code> to fail on a fresh database, and why did it not show up in every test run?</summary>
+      <div class="answer"><strong>AsyncConnectionPool defaulted to autocommit=False, and AsyncPostgresSaver.setup()'s CREATE INDEX CONCURRENTLY migration cannot run inside a transaction block — it only failed when the checkpoint tables didn't already exist, so a dev DB that already had them masked the bug.</strong><br>This is finding F1 (blocking). Task 12 discovered it first via integration tests against a real Postgres and worked around it locally before it was root-caused and fixed for real in the review loop.</div>
+    </details>
+    <details>
+      <summary>How does the graph decide whether to fan out to one, both, or neither of the retrieval branches?</summary>
+      <div class="answer"><strong>Via <code>_route_retrieval</code>, the conditional edge function attached to the orchestrator node: it returns a list of Send(...) objects for 'rag'/'web'/'both', or the string "synthesis" for 'neither'.</strong><br>Send enables LangGraph's parallel fan-out to independently invoke rag_retrieval and/or web_research with the current state; returning a plain string instead routes via a normal edge.</div>
+    </details>
+    <details>
+      <summary>Why did Task 9 import <code>Send</code> from <code>langgraph.types</code> instead of <code>langgraph.constants</code> as the plan specified?</summary>
+      <div class="answer"><strong>Because the installed langgraph==0.6.11 deprecates the langgraph.constants import path for Send.</strong><br>Documented in decisions.md under task-9: a plan deviation driven by the actual installed library version, not a design choice.</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>API schema, router, and app registration (Tasks 10-11)</h2>
+  <p><code>api/schemas.py</code> gained <code>QueryRequest</code> (<code>message</code>, optional <code>sessionId</code>) and <code>QueryResponse</code> (<code>answer</code>, <code>sessionId</code>, <code>confidence</code>, <code>isUncertain</code>, <code>conflictDetected</code>, <code>conflictContext</code>) matching the spec's JSON contract exactly. <code>api/routers/query.py</code> implements <code>POST /query</code>: it generates a new UUID7 session id when none is supplied, lazily builds (and caches as a module-level singleton) the compiled graph on first request, invokes it with <code>thread_id = session_id</code> so LangGraph loads/continues the right checkpoint, and maps the result back into <code>QueryResponse</code>.</p>
+  <p>A second review fix (F3, important) hardened the error path: originally, any exception from <code>graph.ainvoke()</code> was serialized straight into the HTTP response body — a real risk of leaking the Postgres DSN or other credentials embedded in an exception's string representation to an API client. The fix logs the full exception server-side with <code>exc_info=True</code> and returns a generic, credential-free <code>500</code> message instead.</p>
+  <p><code>main.py</code> was updated to register the new router and to call both <code>query.shutdown()</code> and <code>rag_retrieval.shutdown()</code> during the app lifespan's teardown, each wrapped in try/except-and-log so one failing shutdown doesn't block the other or crash the process. Two lazy singletons — the compiled graph in <code>query.py</code> and the connection pool in <code>rag_retrieval.py</code> — currently have no lock around their first-request initialization, a known race on concurrent cold starts (F7 and its sibling N1), deferred rather than fixed in this ticket.</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>What information could leak to an API client before fix F3, and how was it fixed?</summary>
+      <div class="answer"><strong>The raw exception string from graph.ainvoke() — potentially containing DSN/credential details — was returned directly in the HTTP response body; fixed by logging the full exception server-side (exc_info=True) and returning a generic 'Query graph error — see server logs' message instead.</strong><br>apps/backend/src/second_brain/api/routers/query.py's except block now calls <code>_logger.error(..., exc_info=True)</code> then raises <code>HTTPException(status_code=500, detail="Query graph error — see server logs")</code> — no exception text reaches the client.</div>
+    </details>
+    <details>
+      <summary>How does the router determine which LangGraph checkpoint/thread a given /query request continues?</summary>
+      <div class="answer"><strong>It uses request.sessionId if provided (falling back to a freshly generated UUID7 otherwise) as session_id, then passes {"configurable": {"thread_id": session_id}} to graph.ainvoke — LangGraph loads that thread's existing checkpoint automatically.</strong><br>session_id doubles as both the response's sessionId and LangGraph's thread_id, which is exactly what makes AC-10 (session continuity) work without a separate lookup table.</div>
+    </details>
+    <details>
+      <summary>What known concurrency risk exists in <code>_get_graph()</code> and the RAG connection pool's <code>_get_pool()</code>, and why wasn't it fixed in this ticket?</summary>
+      <div class="answer"><strong>Both are lazily-initialized module-level singletons with no lock, so two concurrent cold-start requests can each construct their own graph/pool; the loser's resources leak since only the winner's reference is retained. It was deferred as a minor issue (F7 / N1) rather than blocking merge.</strong><br>Round-1 review flagged F7 for query.py's _get_graph(); round-2 review found the RAG-retrieval fix (F4) had introduced the identical race shape in a second singleton (N1) — both explicitly left for later rather than fixed now.</div>
+    </details>
+    <details>
+      <summary>Why does main.py's lifespan wrap each shutdown call (query.shutdown(), rag_retrieval.shutdown()) in its own try/except?</summary>
+      <div class="answer"><strong>So that a failure in one shutdown path doesn't prevent the other resource from being cleaned up or crash the app during teardown.</strong><br>Each call is independently wrapped with <code>except Exception: _logger.warning(..., exc_info=True)</code>, isolating failures per resource during shutdown.</div>
+    </details>
+  </div>
+</section>
+
+<section class="area">
+  <h2>Verification: integration tests and the two-round review loop (Task 12)</h2>
+  <p><code>tests/integration/test_query_graph.py</code> exercises AC-5 (inbound PII redaction), AC-6 (outbound PII redaction), and AC-10 (session continuity) against a live Postgres, not mocks — this is what surfaced the autocommit bug (F1) before it ever reached a reviewer, and it's also what proved the F2 fix actually works: a live test has the assistant recall its own prior numeric answer on a second turn, a value that never appeared in any human message, so it can only be present in state if <code>redact_outbound</code>'s new <code>AIMessage</code> was actually checkpointed and re-surfaced correctly.</p>
+  <p>The review loop ran two rounds. Round 1 found four actionable issues (F1, F2 blocking; F3, F4 important) plus four minor ones (F5-F8) explicitly deferred. Round 2, run after all four actionable fixes landed, found zero new actionable issues — its only findings were verification notes confirming the fixes hold up individually and in combination (including that a merge conflict in the integration test file, caused by F1's and F2's fixes touching the same file, was resolved cleanly with no dropped assertions) plus one new minor issue (N1, the RAG pool's duplicate unlocked-singleton race introduced by F4's own fix).</p>
+
+  <div class="quiz">
+    <h3>Self-check</h3>
+    <details>
+      <summary>Why did the integration tests catch the autocommit bug (F1) when the unit tests didn't?</summary>
+      <div class="answer"><strong>Because F1 only manifests against a genuinely fresh database with no pre-existing checkpoint tables — something only a live-Postgres integration test exercises; unit tests mock the checkpointer/pool entirely and never touch real transaction semantics.</strong><br>The plan's own unit smoke test for build_query_graph() (Task 9) mocks AsyncConnectionPool and AsyncPostgresSaver.setup() outright, so it can never observe a real CREATE INDEX CONCURRENTLY failure.</div>
+    </details>
+    <details>
+      <summary>How was the F2 (missing AIMessage) fix specifically proven correct at the system level, beyond passing unit tests?</summary>
+      <div class="answer"><strong>A live integration test has the assistant recall a numeric answer from its own prior turn, a value that only ever appeared in an AIMessage (never in a human message) — proving that answer was actually persisted to and retrieved from the checkpoint.</strong><br>Loop summary: "a live test proving the F2 AIMessage-persistence fix by having the assistant recall its own prior numeric answer, which never appeared in any human message."</div>
+    </details>
+    <details>
+      <summary>What did round 2 of the review find, and did it block merge?</summary>
+      <div class="answer"><strong>No new blocking/important issues — only verification notes confirming F1/F2/F4 interact correctly end-to-end and that a merge conflict was resolved cleanly, plus one new minor issue (N1). Nothing blocked merge.</strong><br>Round-2 disposition explicitly states "No blocking or important issues" and "Actionable ... to fix this iteration: none."</div>
+    </details>
+  </div>
+</section>
+
+<section>
+  <h2>Challenges &amp; decisions</h2>
+  <ul class="plain">
+    <li>Task 12's integration tests discovered a real, previously-invisible production bug (F1): AsyncConnectionPool's default autocommit=False breaks AsyncPostgresSaver.setup()'s CREATE INDEX CONCURRENTLY migration on any genuinely fresh database — invisible on any dev DB that already had checkpoint tables. Worked around locally in the test fixture first, then root-caused and fixed for real (kwargs={"autocommit": True}) in the review loop, with the test workaround deleted and replaced by a genuinely isolated regression test.</li>
+    <li>Round-1 review found a second blocking bug (F2): synthesize_answer/redact_outbound never constructed an AIMessage, so assistant answers were silently never appended to the checkpointed message history — multi-turn context only ever contained Human turns, undermining conversation coherence and violating a later ticket's stated assumption that messages[-2] is the prior assistant response. Fixed by computing the redacted final_answer once in redact_outbound and returning both final_answer and a matching AIMessage, guaranteeing raw PII is never even transiently present in messages.</li>
+    <li>F3 (important): the /query error handler was forwarding raw exception text to API clients, a credential/DSN leak risk with no server-side logging for operators to debug from — fixed by logging server-side with exc_info=True and returning a generic client-facing message.</li>
+    <li>F4 (important): retrieve_from_rag opened a brand-new asyncpg connection per request instead of reusing a pool — fixed with a lazily-created shared asyncpg.Pool wired through register_vector's init callback, plus a shutdown() hook wired into main.py's lifespan (a follow-up pass caught that the hook was added but not initially wired in).</li>
+    <li>Task 3 deviated from the plan's literal no-PII test example ("What is the capital of France?") because Presidio's LOCATION recognizer genuinely flags country names as PII — an existing repo behavior surfaced by, but out of scope for, this task; the team swapped test text rather than modifying the shared PII service other in-flight parallel tasks depended on.</li>
+    <li>Task 5 deliberately hardcoded "claude-haiku-4-5" rather than adding a new Settings field, and Task 6 kept its DSN-stripping helper local to rag_retrieval.py rather than touching shared config.py — both explicit decisions to avoid merge conflicts with sibling tasks running in parallel worktrees.</li>
+    <li>Task 9 deviated from the plan's own smoke-test mock setup (which left AsyncConnectionPool.open() as a bare MagicMock instead of AsyncMock, causing a real TypeError against the actual async implementation) — corrected as a test-mock fix, not an implementation change.</li>
+    <li>Task 7 kept rate-limiting logic (asyncio.sleep(1)) in the graph node rather than the Tavily service, treating throttling as graph-specific policy while keeping the service a plain reusable wrapper — a deliberate layering choice, later flagged as an incomplete solution (F6) since it isn't a true global limiter.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Known risks &amp; deferred items</h2>
+  <ul class="plain">
+    <li>N1 — rag_retrieval.py's lazily-created _pool singleton has no lock; concurrent cold-start requests can each create a pool, leaking the loser's connections (same race class as F7).</li>
+    <li>F5 — the +psycopg2 DSN-stripping logic is duplicated across rag_retrieval.py and api/routers/query.py instead of being centralized.</li>
+    <li>F6 — web-research rate limiting is a local per-call asyncio.sleep(1), not a true global/shared limiter, and adds fixed latency even without a burst of requests.</li>
+    <li>F7 — api/routers/query.py's _get_graph() lazy singleton has no lock, so concurrent cold-start requests can race into build_query_graph() more than once, leaking connection pools.</li>
+    <li>F8 — main.py imports the query router module under two separate names (query and query_router) purely to reach both .router and .shutdown().</li>
+    <li>MemoryRetrievalNode remains a stub returning an empty list for this ticket — real cosine-similarity retrieval against learned_facts/model_corrections is deferred to Ticket 5, so orchestrator routing and synthesis currently never see any long-term memory context.</li>
+    <li>Confidence threshold (0.7 uncertain) and the "neither" floor (0.5) are unvalidated starting points per the spec — calibration against human-labelled ground truth is explicitly deferred to the RAGAS evaluation phase (AC-9), not part of this ticket.</li>
+  </ul>
+</section>
+
+</body>
+</html>

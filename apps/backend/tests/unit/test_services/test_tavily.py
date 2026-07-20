@@ -113,9 +113,7 @@ async def test_search_web_calls_client_search_with_query_and_max_results():
 
         results = await search_web("what is new in python", max_results=3)
 
-    mock_client.search.assert_called_once_with(
-        "what is new in python", max_results=3
-    )
+    mock_client.search.assert_called_once_with("what is new in python", max_results=3)
     assert results == [
         {"title": "Result A", "url": "https://a.example", "content": "A"}
     ]

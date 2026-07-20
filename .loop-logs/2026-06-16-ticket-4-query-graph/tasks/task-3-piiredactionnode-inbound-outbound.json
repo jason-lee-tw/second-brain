@@ -1,0 +1,9 @@
+{
+  "task_id": "task-3-piiredactionnode-inbound-outbound",
+  "plan": "docs/superpowers/plans/2026-06-16-ticket-4-query-graph.md",
+  "spec": "docs/superpowers/specs/2026-06-16-second-brain-design.md",
+  "status": "completed",
+  "attempt": 3,
+  "worktree": ".worktrees/task-3-piiredactionnode-inbound-outbound",
+  "completed_steps": ["tdd-loop-complete"]
+}
