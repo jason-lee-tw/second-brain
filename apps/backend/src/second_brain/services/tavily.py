@@ -44,3 +44,9 @@ async def crawl_and_save(url: str) -> Path:
     PENDING_DOCS_DIR.mkdir(parents=True, exist_ok=True)
     filepath.write_text(content, encoding="utf-8")
     return filepath
+
+
+async def search_web(query: str, max_results: int = 3) -> list[dict]:
+    """Search the web via Tavily. Returns an empty list if there are no results."""
+    response = await _client.search(query, max_results=max_results)
+    return response.get("results", [])

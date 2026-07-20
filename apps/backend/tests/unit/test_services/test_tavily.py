@@ -99,6 +99,55 @@ async def test_crawl_url_raises_when_raw_content_is_whitespace_only():
 
 
 @pytest.mark.asyncio
+async def test_search_web_calls_client_search_with_query_and_max_results():
+    """search_web must call _client.search with the given query and max_results."""
+    with patch("second_brain.services.tavily._client") as mock_client:
+        mock_client.search = AsyncMock(
+            return_value={
+                "results": [
+                    {"title": "Result A", "url": "https://a.example", "content": "A"},
+                ]
+            }
+        )
+        from second_brain.services.tavily import search_web
+
+        results = await search_web("what is new in python", max_results=3)
+
+    mock_client.search.assert_called_once_with(
+        "what is new in python", max_results=3
+    )
+    assert results == [
+        {"title": "Result A", "url": "https://a.example", "content": "A"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_web_returns_empty_list_when_no_results():
+    """search_web must return an empty list when Tavily returns no results."""
+    with patch("second_brain.services.tavily._client") as mock_client:
+        mock_client.search = AsyncMock(return_value={"results": []})
+
+        from second_brain.services.tavily import search_web
+
+        results = await search_web("something obscure")
+
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_search_web_default_max_results_is_three():
+    """search_web must default max_results to 3 when not specified."""
+    with patch("second_brain.services.tavily._client") as mock_client:
+        mock_client.search = AsyncMock(return_value={"results": []})
+
+        from second_brain.services.tavily import search_web
+
+        await search_web("default query")
+
+    mock_client.search.assert_called_once_with("default query", max_results=3)
+
+
+@pytest.mark.asyncio
 async def test_crawl_and_save_collision_urls_produce_distinct_files(tmp_path):
     """Two URLs with same slug must land in different files via hash suffix."""
     pending_dir = tmp_path / "pending-digest-docs"
