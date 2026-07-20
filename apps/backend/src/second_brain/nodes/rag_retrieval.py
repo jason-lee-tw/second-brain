@@ -5,19 +5,43 @@ from second_brain.config import settings
 from second_brain.graphs.state import RagResult, SecondBrainState
 from second_brain.services.embeddings import embed_text
 
+# Module-level connection pool singleton — created once on first query, reused
+# across requests to avoid paying a TCP+auth handshake per /query call.
+_pool: asyncpg.Pool | None = None
+
 
 def _asyncpg_dsn(database_url: str) -> str:
     """asyncpg needs a bare postgresql:// DSN — strip the SQLAlchemy driver suffix."""
     return database_url.replace("+psycopg2", "")
 
 
+async def _get_pool(postgres_url: str) -> asyncpg.Pool:
+    global _pool
+    if _pool is None:
+        # register_vector's signature is (conn, schema='public'), matching
+        # asyncpg's per-connection `init` callback contract — it runs once for
+        # every new physical connection the pool opens.
+        _pool = await asyncpg.create_pool(postgres_url, init=register_vector)
+    return _pool
+
+
+async def shutdown() -> None:
+    """Close the pgvector connection pool, if one was opened.
+
+    Called from the FastAPI lifespan in main.py.
+    """
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
+
+
 async def _query_pgvector(
     embedding: list[float], postgres_url: str, top_k: int = 5
 ) -> list[dict]:
     """Run cosine similarity search against document_chunks in pgvector."""
-    conn = await asyncpg.connect(postgres_url)
-    try:
-        await register_vector(conn)
+    pool = await _get_pool(postgres_url)
+    async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT content,
@@ -40,8 +64,6 @@ async def _query_pgvector(
             }
             for row in rows
         ]
-    finally:
-        await conn.close()
 
 
 async def retrieve_from_rag(state: SecondBrainState) -> dict:
