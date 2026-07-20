@@ -1,5 +1,12 @@
 # apps/backend/tests/unit/test_graphs/test_state.py
-from second_brain.graphs.state import FailedFile, IngestionState
+from langchain_core.messages import HumanMessage
+
+from second_brain.graphs.state import (
+    FailedFile,
+    IngestionState,
+    RagResult,
+    SecondBrainState,
+)
 
 
 def test_failed_file_typeddict_construction():
@@ -54,3 +61,35 @@ def test_ingestion_state_with_source_urls():
         "source_urls": {"article.md": "https://example.com/article"},
     }
     assert state["source_urls"]["article.md"] == "https://example.com/article"
+
+
+def test_rag_result_structure():
+    """RagResult can be constructed with all required keys."""
+    item: RagResult = {
+        "content": "some content",
+        "score": 0.85,
+        "chunk_index": 0,
+        "metadata": {"source": "doc.md"},
+    }
+    assert item["score"] == 0.85
+
+
+def test_second_brain_state_structure():
+    """SecondBrainState can be constructed with all required keys."""
+    state: SecondBrainState = {
+        "session_id": "abc-123",
+        "messages": [HumanMessage(content="Hello")],
+        "rag_results": [],
+        "web_results": [],
+        "retrieved_memory": [],
+        "routing_decision": "neither",
+        "final_answer": "",
+        "confidence": 0.0,
+        "is_uncertain": False,
+        "awaiting_correction": False,
+        "awaiting_conflict_clarification": False,
+        "conflict_context": [],
+        "fact_updates": [],
+        "correction_updates": [],
+    }
+    assert state["routing_decision"] == "neither"
