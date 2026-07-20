@@ -20,3 +20,4 @@ __pycache__/
 .claude/worktrees/
 
 .digest.lock
+temp
