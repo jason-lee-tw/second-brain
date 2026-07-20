@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 from uuid6 import uuid7
@@ -5,6 +7,8 @@ from uuid6 import uuid7
 from second_brain.api.schemas import QueryRequest, QueryResponse
 from second_brain.config import settings
 from second_brain.graphs.query_graph import build_query_graph
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -76,8 +80,9 @@ async def query_endpoint(request: QueryRequest) -> QueryResponse:
     try:
         result = await graph.ainvoke(input_state, config=config)
     except Exception as exc:
+        _logger.error("Query graph error", exc_info=True)
         raise HTTPException(
-            status_code=500, detail=f"Query graph error: {exc}"
+            status_code=500, detail="Query graph error — see server logs"
         ) from exc
 
     conflict_context: list[str] = result.get("conflict_context", [])

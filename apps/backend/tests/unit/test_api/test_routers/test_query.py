@@ -136,3 +136,29 @@ async def test_query_response_reports_conflict_detected_when_conflict_context_pr
     assert data["conflictDetected"] is True
     assert data["conflictContext"] == ["Existing fact says X, new statement says Y"]
     assert data["isUncertain"] is True
+
+
+@pytest.mark.asyncio
+async def test_query_graph_error_does_not_leak_exception_detail_to_client():
+    """A graph failure must return 500 without echoing the raw exception
+    (which may embed the Postgres DSN, including credentials) to the client."""
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(
+        side_effect=Exception(
+            "connection to postgresql://user:supersecret@host failed"
+        )
+    )
+
+    with patch(
+        "second_brain.api.routers.query._get_graph",
+        AsyncMock(return_value=mock_graph),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post("/query", json={"message": "Hello"})
+
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert "supersecret" not in detail
+    assert "postgresql://" not in detail
