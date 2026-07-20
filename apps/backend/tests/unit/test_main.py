@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
 from opentelemetry.sdk.trace import TracerProvider
 
 from second_brain.main import app, lifespan
@@ -55,3 +56,12 @@ async def test_lifespan_closes_both_clients_even_if_one_raises():
 
     mock_client.aclose.assert_called_once()
     mock_anthropic.close.assert_called_once()
+
+
+def test_query_route_registered():
+    """Verify /query is registered — a POST with no body returns 422, not 404."""
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/query", json={})
+    # 422 = validation error (missing 'message' field) = route exists
+    # 404 = route not registered
+    assert response.status_code != 404
